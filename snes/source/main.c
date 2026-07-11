@@ -21,6 +21,9 @@
     llamada, validado con board_is_cell_occupied() (misma simplificacion
     puntual). Sin acumulador Q8.8, velocidad por nivel, lock, top-out, line
     clear, render ni pad todavia.
+    Story 3.6 - piece_lock(): escribe piece.x/piece.y en board[][] via
+    board_set() (un unico punto, no la forma completa). Sin line clear,
+    top-out, nueva pieza, lock delay, render, gravedad Q8.8 todavia.
 
     Nota de layout (post-3.5): las pruebas de debug de todas las stories
     excedian la altura visible de la consola (filas hasta 32). Se
@@ -133,6 +136,28 @@ int main(void)
         y3 = (s16)gs.piece.y;
 
         consoleDrawText(1, 12, "GRAV:%d>%d>%d>%d", y0, y1, y2, y3);
+    }
+
+    // Story 3.6 - minimal lock test: keep applying gravity (bounded loop)
+    // until piece.y stops changing, then piece_lock(), then verify with
+    // board_get() that the cell got occupied. Reuses the piece state left by
+    // the Story 3.5 test above (already resting against the (3,5) test cell)
+    // - no re-spawn, no top-out, no line clear, no render, no lock delay.
+    {
+        s16 prev_y;
+        u8 iterations;
+
+        iterations = 0;
+        do {
+            prev_y = (s16)gs.piece.y;
+            piece_apply_gravity(&gs);
+            iterations++;
+        } while ((s16)gs.piece.y != prev_y && iterations < BOARD_HEIGHT);
+
+        piece_lock(&gs);
+        consoleDrawText(1, 14, "LOCK X:%d Y:%d VAL:%u",
+                         (s16)gs.piece.x, (s16)gs.piece.y,
+                         (u16)board_get(&gs, (u8)gs.piece.x, (u8)gs.piece.y));
     }
 
     bgSetEnable(1);
