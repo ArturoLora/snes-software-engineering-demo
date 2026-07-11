@@ -1,0 +1,23 @@
+# Código de referencia (no versionar)
+reference/apotris/
+
+# Build outputs
+build/
+dist/
+out/
+
+# Object files
+*.o
+*.obj
+*.elf
+*.map
+*.lst
+*.sfc
+*.smc
+
+# IDE
+.vscode/
+.idea/
+
+# macOS/Linux
+.DS_Store
