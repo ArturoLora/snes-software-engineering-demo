@@ -12,12 +12,15 @@
     Sin spawn, sin movimiento, sin render, sin rotacion real todavia.
     Story 3.2 - piece_data: tabla de formas (rotacion 0) de las 7 piezas.
     Sin spawn, sin render, sin movimiento, sin colision de forma, sin rotacion.
+    Story 3.3 - piece_spawn(): pieza fija (type=0) en posicion inicial. Sin
+    render, movimiento, gravedad, colisiones, lock, 7-bag ni top-out todavia.
 
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
 #include "game_state.h"
 #include "board.h"
 #include "piece_data.h"
+#include "piece.h"
 
 extern char tilfont, palfont;
 extern char playfieldtiles, playfieldtiles_end;
@@ -62,29 +65,35 @@ int main(void)
     // render/gameplay logic.
     board_init(&gs);
     board_set(&gs, 3, 5, 7);
-    consoleDrawText(3, 12, "BOARD TEST: %u", board_get(&gs, 3, 5));
+    // u8 return value widened to u16 before the vararg call (see note below,
+    // Story 3.3 fix) - consoleDrawText's %u/%d reader always consumes 2 bytes
+    // per argument, and narrower values are not reliably promoted on this
+    // toolchain when pushed as variadic arguments.
+    consoleDrawText(3, 12, "BOARD TEST: %u", (u16)board_get(&gs, 3, 5));
 
     // Story 2.2 - minimal collision test: occupied cell (same test cell as
     // above), an empty in-range cell, and an out-of-range cell.
     consoleDrawText(1, 16, "COL OCC/EMPTY/OOB: %u %u %u",
-                     board_is_cell_occupied(&gs, 3, 5),
-                     board_is_cell_occupied(&gs, 0, 0),
-                     board_is_cell_occupied(&gs, -1, 0));
+                     (u16)board_is_cell_occupied(&gs, 3, 5),
+                     (u16)board_is_cell_occupied(&gs, 0, 0),
+                     (u16)board_is_cell_occupied(&gs, -1, 0));
 
-    // Story 3.1 - minimal ActivePiece test: write test values into gs.piece
-    // and read them back, to confirm the struct exists and is accessible.
-    // No spawn, no movement, no render, no rotation logic.
-    gs.piece.type = 0;
-    gs.piece.rotation = 0;
-    gs.piece.x = 4;
-    gs.piece.y = 0;
+    // Story 3.3 - minimal spawn test: piece_spawn() sets gs.piece (fixed
+    // type=0, initial position) instead of the hand-set test values used by
+    // Story 3.1. No movement, no render, no gravity, no collision, no lock.
+    piece_spawn(&gs);
+    // u8/s8 struct fields are not promoted to a full 16-bit slot when passed
+    // directly as varargs on this toolchain (consoleDrawText's %u/%d reader
+    // always consumes 2 bytes per argument) - explicit widening casts are
+    // required, or each argument after the first shifts by a byte.
     consoleDrawText(1, 20, "PIECE TEST: %u %u %d %d",
-                     gs.piece.type, gs.piece.rotation, gs.piece.x, gs.piece.y);
+                     (u16)gs.piece.type, (u16)gs.piece.rotation,
+                     (s16)gs.piece.x, (s16)gs.piece.y);
 
     // Story 3.2 - minimal piece_data test: print a known cell of the I piece's
     // rotation-0 shape (piece_shapes[0][1][0] should be 1). No spawn, no
     // render, no movement, no shape collision, no rotation.
-    consoleDrawText(1, 22, "PIECE DATA TEST: %u", piece_shapes[0][1][0]);
+    consoleDrawText(1, 22, "PIECE DATA TEST: %u", (u16)piece_shapes[0][1][0]);
 
     bgSetEnable(1);
     setScreenOn();
