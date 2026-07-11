@@ -32,3 +32,15 @@ void piece_move_right(GameState *gs)
     if (!board_is_cell_occupied(gs, new_x, gs->piece.y))
         gs->piece.x = new_x;
 }
+
+/* Adapted from the gravity block inside Apotris Game::update()
+   (tetrisEngine.cpp:543-559): if (checkRotation(0,1,rotation)) pawn.y++;
+   No speedCounter/speed accumulator, no per-level gravity table, no
+   NRS-branch place() — one call here always applies exactly one step,
+   same point-collision simplification as piece_move_left/right. */
+void piece_apply_gravity(GameState *gs)
+{
+    s8 new_y = gs->piece.y + 1;
+    if (!board_is_cell_occupied(gs, gs->piece.x, new_y))
+        gs->piece.y = new_y;
+}
