@@ -14,6 +14,9 @@
     Sin spawn, sin render, sin movimiento, sin colision de forma, sin rotacion.
     Story 3.3 - piece_spawn(): pieza fija (type=0) en posicion inicial. Sin
     render, movimiento, gravedad, colisiones, lock, 7-bag ni top-out todavia.
+    Story 3.4 - piece_move_left()/piece_move_right(): mueven piece.x validado
+    contra board_is_cell_occupied() (colision puntual, no de forma completa).
+    Sin pad real, DAS, ARR, gravedad, lock, render ni rotacion todavia.
 
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
@@ -94,6 +97,22 @@ int main(void)
     // rotation-0 shape (piece_shapes[0][1][0] should be 1). No spawn, no
     // render, no movement, no shape collision, no rotation.
     consoleDrawText(1, 22, "PIECE DATA TEST: %u", (u16)piece_shapes[0][1][0]);
+
+    // Story 3.4 - minimal horizontal movement test: print piece.x before/after
+    // piece_move_left() and piece_move_right(). Only piece.x changes; no pad
+    // input, no DAS/ARR, no gravity, no lock, no render, no rotation.
+    {
+        s16 x_before_left = (s16)gs.piece.x;
+        piece_move_left(&gs);
+        consoleDrawText(1, 24, "MOVE LEFT X: %d -> %d",
+                         x_before_left, (s16)gs.piece.x);
+    }
+    {
+        s16 x_before_right = (s16)gs.piece.x;
+        piece_move_right(&gs);
+        consoleDrawText(1, 26, "MOVE RIGHT X: %d -> %d",
+                         x_before_right, (s16)gs.piece.x);
+    }
 
     bgSetEnable(1);
     setScreenOn();

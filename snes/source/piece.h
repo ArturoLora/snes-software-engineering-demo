@@ -4,5 +4,7 @@
 #include "game_state.h"
 
 void piece_spawn(GameState *gs);
+void piece_move_left(GameState *gs);
+void piece_move_right(GameState *gs);
 
 #endif
