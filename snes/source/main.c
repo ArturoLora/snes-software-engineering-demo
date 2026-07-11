@@ -31,6 +31,14 @@
     actualizadas para ejercitar y verificar la forma completa. Sin render,
     rotacion, SRS, lock delay, line clear ni mecanicas nuevas todavia.
 
+    Story 4.1 - render.c/.h nuevo: hasta 4 sprites OAM para la pieza activa
+    (render_init()/render_sync_piece(), solo lectura sobre GameState). Se
+    llama render_sync_piece(&gs,1) despues de cada punto donde la pieza ya
+    cambiaba de posicion (spawn/movimiento/gravedad) y render_sync_piece(
+    &gs,0) justo despues de piece_lock(). board.c/piece.c/game_state.h sin
+    cambios. Sin rotacion, input real, DMA, line clear ni mecanicas nuevas
+    todavia.
+
     Story 2.3 (roadmap original de epics.md, Epic 2) - board_detect_full_lines()/
     board_collapse_lines(): deteccion y colapso inmediato de filas completas,
     sin conectar todavia con piece_lock()/spawn/render/scoring/combo/top-out.
@@ -46,6 +54,7 @@
 #include "board.h"
 #include "piece_data.h"
 #include "piece.h"
+#include "render.h"
 
 extern char tilfont, palfont;
 extern char playfieldtiles, playfieldtiles_end;
@@ -76,6 +85,10 @@ int main(void)
                   BG_16COLORS, 0x4000);
     bgInitMapSet(1, (u8 *)&playfieldmap, (u16)(&playfieldmap_end - &playfieldmap),
                  SC_32x32, 0x7000);
+
+    // Story 4.1 - active piece sprite graphics (single placeholder tile),
+    // once at boot, before setMode/setScreenOn (game-architecture.md#9).
+    render_init();
 
     // Now put in 16 color mode and disable the unused Bg
     setMode(BG_MODE1, 0);
@@ -109,6 +122,8 @@ int main(void)
     consoleDrawText(1, 8, "PIECE: %u %u %d %d",
                      (u16)gs.piece.type, (u16)gs.piece.rotation,
                      (s16)gs.piece.x, (s16)gs.piece.y);
+    // Story 4.1 - sprites follow the just-spawned position.
+    render_sync_piece(&gs, 1);
 
     // Story 3.4/3.7 - horizontal movement test: piece_move_left() then
     // piece_move_right() (open path, no obstacle), then a third
@@ -140,6 +155,8 @@ int main(void)
                          x_before_left, x_after_left,
                          x_before_right, x_after_right,
                          x_before_blocked, x_after_blocked);
+        // Story 4.1 - sprites follow the final position after movement.
+        render_sync_piece(&gs, 1);
     }
 
     // Story 3.5/3.7 - minimal gravity test: piece_spawn() again to reset y
@@ -165,6 +182,8 @@ int main(void)
         y3 = (s16)gs.piece.y;
 
         consoleDrawText(1, 12, "GRAV:%d>%d>%d>%d", y0, y1, y2, y3);
+        // Story 4.1 - sprites follow the position after the gravity steps.
+        render_sync_piece(&gs, 1);
     }
 
     // Story 3.6/3.7 - lock test: keep applying gravity (bounded loop) until
@@ -198,6 +217,8 @@ int main(void)
 
         consoleDrawText(1, 14, "LOCK X:%d Y:%d CNT:%u",
                          (s16)gs.piece.x, (s16)gs.piece.y, (u16)locked_count);
+        // Story 4.1 - hide the piece sprites immediately after lock.
+        render_sync_piece(&gs, 0);
     }
 
     // Story 2.3 - minimal line-clear test: mark a reference cell just above a
@@ -221,6 +242,14 @@ int main(void)
         consoleDrawText(1, 20, "LINES COLLAPSE ROW10:%u CNT:%u",
                          (u16)board_get(&gs, 0, 10), (u16)gs.lines.count);
     }
+
+    // Diagnostic fix: the last piece-sprite call above was
+    // render_sync_piece(&gs, 0) (hide, right after piece_lock()) - with no
+    // per-frame loop re-showing them yet (that's Story 4.2, real input),
+    // sprites stayed hidden for every frame once the screen turned on. Show
+    // them once more here so the placeholder tile is actually visible for
+    // manual verification in Ares.
+    render_sync_piece(&gs, 1);
 
     bgSetEnable(1);
     setScreenOn();

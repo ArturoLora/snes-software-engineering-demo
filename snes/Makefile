@@ -29,4 +29,11 @@ playfield.pic: playfield.png
 	@echo convert playfield tileset+map ... $(notdir $@)
 	$(GFXCONV) -s 8 -o 16 -u 16 -e 0 -p -m -i $<
 
-bitmaps : pvsneslibfont.pic playfield.pic
+#---------------------------------------------------------------------------------
+# active piece sprite tile (Story 4.1): single 8x8 solid-color placeholder,
+# no map needed (sprites use oamInitGfxSet, not a BG tilemap).
+piece.pic: piece.png
+	@echo convert piece sprite tile ... $(notdir $@)
+	$(GFXCONV) -s 8 -o 16 -u 16 -e 0 -p -i $<
+
+bitmaps : pvsneslibfont.pic playfield.pic piece.pic

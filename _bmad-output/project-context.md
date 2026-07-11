@@ -92,3 +92,44 @@ Cada Story debe terminar en este orden:
 4. Solo entonces considerar la Story terminada
 
 Nunca asumir que una Story está completa únicamente porque compila.
+
+## Investigación externa (PVSnesLib y toolchains)
+
+Por defecto:
+
+- NO usar Internet.
+- NO investigar documentación externa.
+- Resolver usando:
+  - project-context.md
+  - game-architecture.md
+  - epics.md
+  - reference/apotris
+  - ejemplos oficiales instalados localmente.
+
+EXCEPCIÓN:
+
+Si después de una investigación local:
+
+- se descartaron al menos 2 hipótesis razonables;
+- el problema pertenece a una librería/framework/toolchain externo
+  (PVSnesLib, devkitSNES, gfx4snes, etc.);
+- y no existe evidencia concluyente en el código local;
+
+DETENER la implementación.
+
+No seguir proponiendo hipótesis.
+
+En su lugar, sugerir explícitamente ejecutar:
+
+/gds-investigate
+
+con una búsqueda externa limitada al problema técnico específico.
+
+La investigación debe:
+
+- responder una única pregunta;
+- usar preferentemente documentación oficial;
+- entregar la referencia utilizada;
+- proponer el cambio mínimo.
+
+No volver a investigar lo ya descartado.

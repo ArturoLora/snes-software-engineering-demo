@@ -25,3 +25,15 @@ playfieldpal:
 playfieldpal_end:
 
 .ends
+
+.section ".rodata3" superfree
+
+piecetiles:
+.incbin "piece.pic"
+piecetiles_end:
+
+piecepal:
+.incbin "piece.pal"
+piecepal_end:
+
+.ends
