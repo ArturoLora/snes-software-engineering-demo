@@ -1,6 +1,10 @@
+---
+baseline_commit: e4e50a797c7646da66e0852e344d448ae2d606be
+---
+
 # Story 1.1: Boot de ROM e inicialización mínima de PVSnesLib
 
-Status: ready-for-dev
+Status: in-progress (implementación + build verificados; validación manual en emulador pendiente — ver Completion Notes)
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,32 +38,25 @@ board, pieza activa, spawn, render gráfico real, BG del playfield, sprites OAM 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Instalar/configurar toolchain PVSnesLib (prerequisito de entorno, no código)** (AC: #1)
-  - [ ] Descargar release 4.3.0 (o la última estable) desde `https://github.com/alekmaul/pvsneslib/releases/latest`, o clonar+compilar desde `alekmaul/pvsneslib` (rama `master`) siguiendo `https://github.com/alekmaul/pvsneslib/wiki/Installation`.
-  - [ ] Exportar `PVSNESLIB_HOME` apuntando al directorio instalado/extraído.
-  - [ ] **[VERIFICAR EN IMPLEMENTACIÓN]** confirmar que `816-tcc`/`wla-dx`/`GFXCONV` quedan accesibles y que un `make` trivial corre en este SO (Linux) antes de escribir código de juego — no hay instalación local previa verificada en este repo.
+- [x] **Task 1: Instalar/configurar toolchain PVSnesLib (prerequisito de entorno, no código)** (AC: #1)
+  - [x] Descargado release 4.5.0 (más reciente que la 4.3.0 asumida en la story) desde `https://github.com/alekmaul/pvsneslib/releases/latest`.
+  - [x] `PVSNESLIB_HOME` exportado apuntando al directorio extraído.
+  - [x] **Verificado:** `816-tcc`/`wla-65816`/`wlalink`/`gfx4snes` (GFXCONV) accesibles bajo `devkitsnes/bin` y `devkitsnes/tools`; smoke-test compilando el ejemplo oficial `hello_world` confirmó el toolchain funcional antes de escribir código propio. **Instalado solo en este entorno de sesión (`~/pvsneslib_install`), no en el repo** — ver Completion Notes.
 
-- [ ] **Task 2: Crear árbol de proyecto SNES nuevo, aislado del código GBA existente** (AC: #1)
-  - [ ] Crear directorio nuevo `snes/` en la raíz del repo — **no reusar** `source/`/`Makefile` de la raíz (son C++/devkitARM/libtonc del port GBA, incompatibles con el toolchain 816-tcc de PVSnesLib). Ver "Project Structure Notes" abajo.
-  - [ ] Dentro de `snes/`: `source/main.c`, `hdr.asm`, `data.asm`, asset de fuente (`pvsneslibfont.png` o `.bmp`), `Makefile`.
-  - [ ] `hdr.asm`/`data.asm`/`Makefile`/asset de fuente: copiar tal cual el patrón del ejemplo oficial `pvsneslib/snes-examples/hello_world/` (boilerplate de cabecera SNES/WLA-DX, secciones de rodata con `.incbin` del tileset+paleta de fuente, reglas `GFXCONV`) — **no reinventar** estos archivos, son plantilla estándar de todo proyecto PVSnesLib. Cambiar solo `NAME` en `hdr.asm` y `ROMNAME` en `Makefile` (ej. `apotris`).
+- [x] **Task 2: Crear árbol de proyecto SNES nuevo, aislado del código GBA existente** (AC: #1)
+  - [x] Creado `snes/` en la raíz del repo.
+  - [x] Dentro de `snes/`: `source/main.c`, `hdr.asm`, `data.asm`, `pvsneslibfont.png`, `Makefile`.
+  - [x] `hdr.asm`/`data.asm`/`Makefile`/`pvsneslibfont.png` copiados tal cual del ejemplo oficial `hello_world` (release 4.5.0 instalada). Cambios: `NAME` en `hdr.asm` → `"APOTRIS SNES         "` (21 bytes exactos), `ROMNAME` en `Makefile` → `apotris`, y `SRC := source` agregado antes del `include snes_rules` (el default de `snes_rules` es `src`, la story pide `source/`).
 
-- [ ] **Task 3: `snes/source/main.c` — init + mensaje + lectura de pad** (AC: #2, #3, #4, #5)
-  - [ ] Secuencia de init (orden confirmado, `game-architecture.md` §9 + patrón oficial de `hello_world.c`/`controller.c`):
-    1. `consoleSetTextMapPtr(0x6800); consoleSetTextGfxPtr(0x3000); consoleSetTextOffset(0x0100);`
-    2. `consoleInitText(0, 16*2, &<fontTiles>, &<fontPal>);`
-    3. `bgSetGfxPtr(0, 0x2000); bgSetMapPtr(0, 0x6800, SC_32x32);`
-    4. `setMode(BG_MODE1, 0);`
-    5. `bgSetDisable(1); bgSetDisable(2);` (BGs no usados)
-    6. `consoleDrawText(x, y, "Hello Apotris SNES");` (o texto similar)
-    7. `setScreenOn();`
-  - [ ] Loop principal: `while(1) { <leer pad y refrescar texto>; WaitForVBlank(); }`.
-  - [ ] Lectura de pad: usar `padsCurrent(0)` (confirmado en `snes-examples/input/controller/controller.c` — retorna máscara de botones, comparar contra `KEY_A/KEY_B/KEY_START/KEY_LEFT/...`) y volcar el resultado con `consoleDrawText` en una posición fija (sobrescribiendo el texto anterior cada frame).
-  - [ ] **Importante:** esto es una lectura de pad *inline* en `main.c` solo para verificar el toolchain — **no** es el módulo `input.c` de la arquitectura (ese llega en Epic 4/Story 4.2 y usará `pad_keys`/`pad_keysdown` con la capa `InputIntent`). No crear `input.c` en esta story.
+- [x] **Task 3: `snes/source/main.c` — init + mensaje + lectura de pad** (AC: #2, #3, #4, #5)
+  - [x] Secuencia de init implementada en el orden especificado (idéntica a `hello_world.c`).
+  - [x] Loop principal: `while(1) { padsCurrent(0); consoleDrawText(...); WaitForVBlank(); }` — una sola llamada a `WaitForVBlank()` por vuelta.
+  - [x] Lectura de pad con `padsCurrent(0)` + `switch` sobre `KEY_A/B/SELECT/START/RIGHT/LEFT/DOWN/UP/R/L/X/Y` (patrón calcado de `snes-examples/input/controller/controller.c`), dibujado en fila fija (6,18) sobrescrita cada frame.
+  - [x] Sin `input.c`: la lectura de pad es inline en `main.c`, tal como especifica la story.
 
-- [ ] **Task 4: Compilar y verificar en emulador** (AC: #1, #2, #3, #4, #5)
-  - [ ] `make` en `snes/` → produce `snes/apotris.sfc` (o el nombre elegido) sin errores.
-  - [ ] Cargar en un emulador SNES y confirmar los 5 AC de arriba.
+- [x] **Task 4: Compilar y verificar en emulador** (AC: #1, #2, #3, #4, #5)
+  - [x] `make` en `snes/` → produce `snes/apotris.sfc` sin errores (AC #1 verificado automáticamente).
+  - [ ] Cargar en un emulador SNES y confirmar AC #2, #3, #4, #5 — **pendiente de validación manual del usuario** (sin emulador disponible en este entorno; ver Completion Notes para instrucciones).
 
 ## Dev Notes
 
@@ -105,8 +102,40 @@ board, pieza activa, spawn, render gráfico real, BG del playfield, sprites OAM 
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- Build log (release 4.5.0, `make` en `snes/`): compiló y linkeó sin errores tras corregir la longitud del campo `NAME` en `hdr.asm` (WLA-DX exige exactamente 21 bytes; el primer intento con padding incorrecto falló con `DIRECTIVE_ERROR: NAME requires a string of 1 to 21 letters`).
+- Smoke-test previo: se compiló el ejemplo oficial `snes-examples/hello_world` sin modificar, para confirmar que el toolchain (816-tcc/wla-65816/wlalink/gfx4snes) funciona en este SO antes de escribir código propio.
 
 ### Completion Notes List
 
+- **Toolchain no queda instalado en el repo ni en el entorno del usuario.** Se descargó y extrajo PVSnesLib 4.5.0 (release oficial más reciente; la story asumía 4.3.0, no existe conflicto de API relevante para esta story) en `~/pvsneslib_install` **de esta sesión/sandbox únicamente**. Antes de poder correr `make` en `snes/` en otra máquina (la del usuario, CI, etc.) hace falta:
+  1. Descargar `pvsneslib_450_64b_linux.zip` (o el binario del SO correspondiente) desde `https://github.com/alekmaul/pvsneslib/releases/latest` y extraerlo.
+  2. `export PVSNESLIB_HOME=<ruta al directorio extraído>/pvsneslib` (la ruta termina en un directorio `pvsneslib` anidado dentro del zip).
+  3. Opcional: agregar `<PVSNESLIB_HOME>/devkitsnes/bin` al `PATH`.
+- **Build verificado (AC #1):** `make` en `snes/` genera `snes/apotris.sfc` (262144 bytes) sin errores ni warnings de link. Se corrió `make clean` al final, por lo que el árbol `snes/` quedó solo con los fuentes (`hdr.asm`, `data.asm`, `Makefile`, `pvsneslibfont.png`, `source/main.c`) — sin `.sfc`/`.sym`/`.obj`/artefactos de `gfx4snes`, todos regenerables con `make`.
+- **AC #2–#5 no verificados por el agente** — no hay emulador SNES ni entorno gráfico en este sandbox, y el usuario pidió explícitamente no instalar ninguno ni modificar el sistema. Validación manual pendiente. Pasos para el usuario:
+  1. Instalar el toolchain (ver arriba) y correr `make` dentro de `snes/` → debe producir `snes/apotris.sfc`.
+  2. Abrir `snes/apotris.sfc` en bsnes, Mesen-S o Snes9x.
+  3. **AC #2** (no crashea/cuelga): la pantalla debe llegar a un estado visual estable (fondo con texto), no quedar en negro ni congelada.
+  4. **AC #3** (mensaje visible): debe verse el texto `"Hello Apotris SNES"` y `"PRESS A PAD BUTTON"` en pantalla.
+  5. **AC #4** (lectura de pad): al presionar cualquier botón del pad (A/B/X/Y/L/R/Start/Select/D-Pad), debe aparecer una línea tipo `"<BOTÓN> PRESSED"` en la fila inferior, y desaparecer (línea en blanco) al soltar todos los botones.
+  6. **AC #5** (frame loop determinista): confirmado por inspección de código — `main.c` tiene una única llamada a `WaitForVBlank()` al final del `while(1)`, sin otra espera/busy-wait en el loop.
+- **Sin desviaciones de alcance:** no se tocó nada fuera de lo permitido por la story (no hay `board`/`piece`/render real/BG del playfield/DMA). No se creó `input.c` (lectura de pad queda inline en `main.c`, como pide la story).
+- **Una desviación menor:** la story sugiere PVSnesLib 4.3.0; se usó 4.5.0 (release actual al momento de esta implementación) porque es la que ofrece GitHub Releases hoy. La API usada (`consoleInitText`, `consoleDrawText`, `padsCurrent`, `KEY_*`, `bgSetGfxPtr`, `setMode`, `WaitForVBlank`) es la misma verificada en los ejemplos oficiales incluidos en esa release — sin cambios de firma detectados.
+
 ### File List
+
+- `snes/hdr.asm` (nuevo) — cabecera SNES/WLA-DX, adaptada del ejemplo oficial `hello_world` (solo `NAME` cambiado).
+- `snes/data.asm` (nuevo) — sección rodata con el tileset/paleta de la fuente de consola, sin cambios respecto al ejemplo oficial.
+- `snes/Makefile` (nuevo) — adaptado del ejemplo oficial `hello_world`: `ROMNAME := apotris` y `SRC := source` (en vez del `src` por defecto de `snes_rules`).
+- `snes/pvsneslibfont.png` (nuevo) — asset de fuente de consola, copiado tal cual del ejemplo oficial `hello_world`.
+- `snes/source/main.c` (nuevo) — boot, init de PVSnesLib, consola de texto, mensaje y lectura de pad inline.
+
+### Change Log
+
+| Fecha | Cambio |
+| --- | --- |
+| 2026-07-11 | Implementación inicial de Story 1.1: árbol `snes/` creado, toolchain PVSnesLib 4.5.0 instalado y verificado en el entorno de sesión, `make` produce `snes/apotris.sfc` sin errores (AC #1). AC #2–#5 quedan pendientes de validación manual del usuario en emulador. Status → in-progress. |

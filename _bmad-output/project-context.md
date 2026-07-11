@@ -71,3 +71,24 @@ GBA-specific, no portar ni usar como referencia de implementación: `rumble.c`, 
 - Eliminar reglas que se vuelvan obvias con el tiempo.
 
 Last Updated: 2026-07-10
+
+## Token Budget
+
+Para este proyecto:
+
+- Preferir workflows pequeños e incrementales.
+- Evitar subagentes salvo que el usuario los solicite.
+- Evitar investigaciones web cuando el problema pueda resolverse inspeccionando el repositorio o el entorno local.
+- Cada Story debe poder implementarse en una sola sesión.
+- Antes de usar workflows de revisión o investigación costosos, proponer una alternativa de bajo consumo de tokens.
+
+## Validation
+
+Cada Story debe terminar en este orden:
+
+1. make
+2. Ejecutar en ares
+3. Esperar validación manual del desarrollador
+4. Solo entonces considerar la Story terminada
+
+Nunca asumir que una Story está completa únicamente porque compila.

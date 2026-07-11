@@ -43,3 +43,24 @@ Do not modify `project-context.md` or any other BMAD artifact — those are main
 - Never run `git add`, `git commit`, `git push`, `git pull --rebase`, `git merge`, `git rebase`, `git tag`, or create/delete branches.
 - Claude may suggest Git commands when useful, but Arturo is the only person who performs Git operations.
 - Never finish a workflow by committing or pushing automatically.
+
+## Token Budget
+
+Para este proyecto:
+
+- Preferir workflows pequeños e incrementales.
+- Evitar subagentes salvo que el usuario los solicite.
+- Evitar investigaciones web cuando el problema pueda resolverse inspeccionando el repositorio o el entorno local.
+- Cada Story debe poder implementarse en una sola sesión.
+- Antes de usar workflows de revisión o investigación costosos, proponer una alternativa de bajo consumo de tokens.
+
+## Validation
+
+Cada Story debe terminar en este orden:
+
+1. make
+2. Ejecutar en ares
+3. Esperar validación manual del desarrollador
+4. Solo entonces considerar la Story terminada
+
+Nunca asumir que una Story está completa únicamente porque compila.

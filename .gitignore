@@ -21,3 +21,14 @@ out/
 
 # macOS/Linux
 .DS_Store
+# SNES build outputs
+snes/*.sfc
+snes/*.sym
+snes/*.obj
+snes/*.pic
+snes/*.pal
+snes/*.map
+snes/*.inc
+snes/*_data.as
+snes/linkfile
+snes/source/*.obj
