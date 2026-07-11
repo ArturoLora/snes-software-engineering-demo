@@ -4,8 +4,15 @@
     Story 1.2 - BG1: playfield vacio (tileset+mapa fijo 10x20, sin logica de tablero).
     Sin board/pieza/render real todavia (eso llega en stories futuras).
 
+    Story 2.1 - Tablero logico estatico (board.c/game_state.h), sin piezas/gravedad/
+    colision/render de tablero todavia.
+    Story 2.2 - board_is_cell_occupied: bordes/piso + celda ocupada, sin pieza/
+    spawn/rotacion todavia.
+
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
+#include "game_state.h"
+#include "board.h"
 
 extern char tilfont, palfont;
 extern char playfieldtiles, playfieldtiles_end;
@@ -13,6 +20,7 @@ extern char playfieldpal, playfieldpal_end;
 extern char playfieldmap, playfieldmap_end;
 
 unsigned short pad0;
+static GameState gs;
 
 //---------------------------------------------------------------------------------
 int main(void)
@@ -43,6 +51,20 @@ int main(void)
     // Draw a wonderful text :P
     consoleDrawText(6, 10, "Hello Apotris SNES");
     consoleDrawText(3, 14, "PRESS A PAD BUTTON");
+
+    // Story 2.1 - minimal board test: write a known value to a test cell and
+    // read it back, to verify board_init/board_set/board_get without any
+    // render/gameplay logic.
+    board_init(&gs);
+    board_set(&gs, 3, 5, 7);
+    consoleDrawText(3, 12, "BOARD TEST: %u", board_get(&gs, 3, 5));
+
+    // Story 2.2 - minimal collision test: occupied cell (same test cell as
+    // above), an empty in-range cell, and an out-of-range cell.
+    consoleDrawText(1, 16, "COL OCC/EMPTY/OOB: %u %u %u",
+                     board_is_cell_occupied(&gs, 3, 5),
+                     board_is_cell_occupied(&gs, 0, 0),
+                     board_is_cell_occupied(&gs, -1, 0));
 
     bgSetEnable(1);
     setScreenOn();
