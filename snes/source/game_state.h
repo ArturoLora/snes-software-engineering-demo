@@ -19,10 +19,19 @@ typedef struct
     s8 y;
 } ActivePiece;
 
+#define LINES_TO_CLEAR_MAX 4
+
+typedef struct
+{
+    u8 rows[LINES_TO_CLEAR_MAX];
+    u8 count;
+} LinesToClear;
+
 typedef struct
 {
     BoardState board;
     ActivePiece piece;
+    LinesToClear lines;
 } GameState;
 
 #endif

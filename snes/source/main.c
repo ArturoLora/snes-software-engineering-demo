@@ -25,6 +25,10 @@
     board_set() (un unico punto, no la forma completa). Sin line clear,
     top-out, nueva pieza, lock delay, render, gravedad Q8.8 todavia.
 
+    Story 2.3 (roadmap original de epics.md, Epic 2) - board_detect_full_lines()/
+    board_collapse_lines(): deteccion y colapso inmediato de filas completas,
+    sin conectar todavia con piece_lock()/spawn/render/scoring/combo/top-out.
+
     Nota de layout (post-3.5): las pruebas de debug de todas las stories
     excedian la altura visible de la consola (filas hasta 32). Se
     condensaron/reordenaron para que todas quepan a la vez (filas 2-16) -
@@ -158,6 +162,28 @@ int main(void)
         consoleDrawText(1, 14, "LOCK X:%d Y:%d VAL:%u",
                          (s16)gs.piece.x, (s16)gs.piece.y,
                          (u16)board_get(&gs, (u8)gs.piece.x, (u8)gs.piece.y));
+    }
+
+    // Story 2.3 - minimal line-clear test: mark a reference cell just above a
+    // row, fill that row completely by hand, detect it, then collapse and
+    // verify the marker shifted down into the (now-cleared) row. Not
+    // connected to piece_lock()/spawn/render/scoring/combo/top-out.
+    {
+        u8 x;
+
+        board_set(&gs, 0, 9, 9);
+        for (x = 0; x < BOARD_WIDTH; x++)
+            board_set(&gs, x, 10, 5);
+
+        {
+            u16 detected = (u16)board_detect_full_lines(&gs);
+            consoleDrawText(1, 18, "LINES DET:%u ROW0:%u",
+                             detected, (u16)gs.lines.rows[0]);
+        }
+
+        board_collapse_lines(&gs);
+        consoleDrawText(1, 20, "LINES COLLAPSE ROW10:%u CNT:%u",
+                         (u16)board_get(&gs, 0, 10), (u16)gs.lines.count);
     }
 
     bgSetEnable(1);
