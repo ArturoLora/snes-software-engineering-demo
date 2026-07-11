@@ -8,6 +8,8 @@
     colision/render de tablero todavia.
     Story 2.2 - board_is_cell_occupied: bordes/piso + celda ocupada, sin pieza/
     spawn/rotacion todavia.
+    Story 3.1 - ActivePiece agregado a GameState (solo el dato: type/rotation/x/y).
+    Sin spawn, sin movimiento, sin render, sin rotacion real todavia.
 
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
@@ -65,6 +67,16 @@ int main(void)
                      board_is_cell_occupied(&gs, 3, 5),
                      board_is_cell_occupied(&gs, 0, 0),
                      board_is_cell_occupied(&gs, -1, 0));
+
+    // Story 3.1 - minimal ActivePiece test: write test values into gs.piece
+    // and read them back, to confirm the struct exists and is accessible.
+    // No spawn, no movement, no render, no rotation logic.
+    gs.piece.type = 0;
+    gs.piece.rotation = 0;
+    gs.piece.x = 4;
+    gs.piece.y = 0;
+    consoleDrawText(1, 20, "PIECE TEST: %u %u %d %d",
+                     gs.piece.type, gs.piece.rotation, gs.piece.x, gs.piece.y);
 
     bgSetEnable(1);
     setScreenOn();
