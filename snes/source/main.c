@@ -37,7 +37,16 @@
     cambiaba de posicion (spawn/movimiento/gravedad) y render_sync_piece(
     &gs,0) justo despues de piece_lock(). board.c/piece.c/game_state.h sin
     cambios. Sin rotacion, input real, DMA, line clear ni mecanicas nuevas
-    todavia.
+    todavia. IDs OAM van multiplicados x4 (0,4,8,12) - cada sprite ocupa
+    4 bytes en la tabla OAM (confirmado en la wiki oficial de PVSnesLib).
+
+    Story 4.2 - input.c/.h nuevo: unica frontera con pad_keys/pad_keysdown
+    de PVSnesLib. Loop principal ahora lee input real (padsDown) cada frame
+    y mueve la pieza activa (piece_move_left/right) en vez de depender solo
+    de la secuencia de arranque simulada. piece_spawn() nuevo antes del
+    while(1) para que el loop interactivo tenga una pieza fresca (no la ya
+    lockeada por las pruebas de boot). Sin gravedad/lock en el loop, sin
+    rotacion, sin DMA todavia.
 
     Story 2.3 (roadmap original de epics.md, Epic 2) - board_detect_full_lines()/
     board_collapse_lines(): deteccion y colapso inmediato de filas completas,
@@ -55,6 +64,7 @@
 #include "piece_data.h"
 #include "piece.h"
 #include "render.h"
+#include "input.h"
 
 extern char tilfont, palfont;
 extern char playfieldtiles, playfieldtiles_end;
@@ -243,12 +253,12 @@ int main(void)
                          (u16)board_get(&gs, 0, 10), (u16)gs.lines.count);
     }
 
-    // Diagnostic fix: the last piece-sprite call above was
-    // render_sync_piece(&gs, 0) (hide, right after piece_lock()) - with no
-    // per-frame loop re-showing them yet (that's Story 4.2, real input),
-    // sprites stayed hidden for every frame once the screen turned on. Show
-    // them once more here so the placeholder tile is actually visible for
-    // manual verification in Ares.
+    // Story 4.2 - fresh spawn for the interactive loop below: the boot-time
+    // tests above already locked their own test piece (piece_lock(), Story
+    // 3.6/3.7) before reaching setScreenOn() - without a new spawn here the
+    // live loop would move an already-locked piece. render_sync_piece(&gs,1)
+    // shows it immediately, same as every other spawn point above.
+    piece_spawn(&gs);
     render_sync_piece(&gs, 1);
 
     bgSetEnable(1);
@@ -256,6 +266,21 @@ int main(void)
 
     while (1)
     {
+        // Story 4.2 - real pad input drives the active piece (Story 3.3/3.4
+        // movement contract), replacing the debug-only simulated input used
+        // by every story up to now. input.c is the sole boundary with
+        // pad_keys/pad_keysdown (game-architecture.md#2, #6).
+        {
+            InputIntent intent = input_read();
+
+            if (intent.left)
+                piece_move_left(&gs);
+            if (intent.right)
+                piece_move_right(&gs);
+
+            render_sync_piece(&gs, 1);
+        }
+
         // Get current #0 pad
         pad0 = padsCurrent(0);
 
