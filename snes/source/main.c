@@ -25,6 +25,12 @@
     board_set() (un unico punto, no la forma completa). Sin line clear,
     top-out, nueva pieza, lock delay, render, gravedad Q8.8 todavia.
 
+    Story 3.7 - piece.c migrado de colision/lock de punto unico a la forma
+    completa de piece_shapes[type] (piece_shape_collides(), interno a
+    piece.c). Pruebas de movimiento/gravedad/lock (filas 10/12/14) below
+    actualizadas para ejercitar y verificar la forma completa. Sin render,
+    rotacion, SRS, lock delay, line clear ni mecanicas nuevas todavia.
+
     Story 2.3 (roadmap original de epics.md, Epic 2) - board_detect_full_lines()/
     board_collapse_lines(): deteccion y colapso inmediato de filas completas,
     sin conectar todavia con piece_lock()/spawn/render/scoring/combo/top-out.
@@ -104,11 +110,18 @@ int main(void)
                      (u16)gs.piece.type, (u16)gs.piece.rotation,
                      (s16)gs.piece.x, (s16)gs.piece.y);
 
-    // Story 3.4 - minimal horizontal movement test: piece_move_left() then
-    // piece_move_right(), condensed to one row. Only piece.x changes; no pad
-    // input, no DAS/ARR, no gravity, no lock, no render, no rotation.
+    // Story 3.4/3.7 - horizontal movement test: piece_move_left() then
+    // piece_move_right() (open path, no obstacle), then a third
+    // piece_move_right() with an obstacle placed under a cell of the shape
+    // OTHER than piece.x/piece.y itself - (7,3) is the rightmost cell of the
+    // I-piece's occupied row (piece.y+1) if it moved to x=4 (columns 4-7).
+    // The old point-only check (Story 3.4) tested (new_x, piece.y) = (4,2)
+    // and could never see this obstacle; the new piece_shape_collides()
+    // (Story 3.7) does, so this move must stay blocked (BLK before==after).
+    // No pad input, no DAS/ARR, no gravity, no lock, no render, no rotation.
     {
         s16 x_before_left, x_after_left, x_before_right, x_after_right;
+        s16 x_before_blocked, x_after_blocked;
 
         x_before_left = (s16)gs.piece.x;
         piece_move_left(&gs);
@@ -118,15 +131,27 @@ int main(void)
         piece_move_right(&gs);
         x_after_right = (s16)gs.piece.x;
 
-        consoleDrawText(1, 10, "MOVE L:%d>%d R:%d>%d",
+        board_set(&gs, 7, 3, 9);
+        x_before_blocked = (s16)gs.piece.x;
+        piece_move_right(&gs);
+        x_after_blocked = (s16)gs.piece.x;
+
+        consoleDrawText(1, 10, "MOVE L:%d>%d R:%d>%d BLK:%d>%d",
                          x_before_left, x_after_left,
-                         x_before_right, x_after_right);
+                         x_before_right, x_after_right,
+                         x_before_blocked, x_after_blocked);
     }
 
-    // Story 3.5 - minimal gravity test: piece_spawn() again to reset y (the
-    // movement test above only touched x), then 3 fixed gravity steps,
-    // condensed to one row as a Y chain. No pad, no lock, no top-out, no
-    // line clear, no render.
+    // Story 3.5/3.7 - minimal gravity test: piece_spawn() again to reset y
+    // (the movement test above only touched x) and x (clears the (7,3)
+    // obstacle's effect on position, board cell itself is left set - no
+    // impact, it's outside the piece's fall path). 3 fixed gravity steps,
+    // condensed to one row as a Y chain. Since Story 3.7, gravity checks the
+    // shape's occupied row (piece.y+1), one row below the old point check -
+    // it now reaches the (3,5) test obstacle (set near the top of main())
+    // one step earlier than before, so the chain plateaus sooner (still
+    // shows gravity falling then correctly stopping). No pad, no lock, no
+    // top-out, no line clear, no render.
     piece_spawn(&gs);
     {
         s16 y0, y1, y2, y3;
@@ -142,14 +167,18 @@ int main(void)
         consoleDrawText(1, 12, "GRAV:%d>%d>%d>%d", y0, y1, y2, y3);
     }
 
-    // Story 3.6 - minimal lock test: keep applying gravity (bounded loop)
-    // until piece.y stops changing, then piece_lock(), then verify with
-    // board_get() that the cell got occupied. Reuses the piece state left by
-    // the Story 3.5 test above (already resting against the (3,5) test cell)
-    // - no re-spawn, no top-out, no line clear, no render, no lock delay.
+    // Story 3.6/3.7 - lock test: keep applying gravity (bounded loop) until
+    // piece.y stops changing, then piece_lock(). Since Story 3.7, piece_lock
+    // writes all 4 occupied cells of piece_shapes[type] (not a single
+    // point), so instead of reading back one cell we count how many of the
+    // 4 shape cells at the final position read back non-zero from the board
+    // - must be 4. Reuses the piece state left by the gravity test above
+    // (already resting against the (3,5) test cell) - no re-spawn, no
+    // top-out, no line clear, no render, no lock delay.
     {
         s16 prev_y;
         u8 iterations;
+        u8 row, col, locked_count;
 
         iterations = 0;
         do {
@@ -159,9 +188,16 @@ int main(void)
         } while ((s16)gs.piece.y != prev_y && iterations < BOARD_HEIGHT);
 
         piece_lock(&gs);
-        consoleDrawText(1, 14, "LOCK X:%d Y:%d VAL:%u",
-                         (s16)gs.piece.x, (s16)gs.piece.y,
-                         (u16)board_get(&gs, (u8)gs.piece.x, (u8)gs.piece.y));
+
+        locked_count = 0;
+        for (row = 0; row < PIECE_GRID_SIZE; row++)
+            for (col = 0; col < PIECE_GRID_SIZE; col++)
+                if (piece_shapes[gs.piece.type][row][col] &&
+                    board_get(&gs, (u8)(gs.piece.x + col), (u8)(gs.piece.y + row)) != 0)
+                    locked_count++;
+
+        consoleDrawText(1, 14, "LOCK X:%d Y:%d CNT:%u",
+                         (s16)gs.piece.x, (s16)gs.piece.y, (u16)locked_count);
     }
 
     // Story 2.3 - minimal line-clear test: mark a reference cell just above a

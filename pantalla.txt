@@ -1,0 +1,13 @@
+b:7 c:1/0/1 D:1
+
+piece 0 0 3 2
+
+move L:3>2 R:2>3
+
+grav:2>3>4>4
+
+lock x:3 y:4 val:1
+
+lines det:1 row0:10
+
+lines collapse row10:9 cnt:0
