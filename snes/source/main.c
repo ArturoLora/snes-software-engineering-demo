@@ -10,11 +10,14 @@
     spawn/rotacion todavia.
     Story 3.1 - ActivePiece agregado a GameState (solo el dato: type/rotation/x/y).
     Sin spawn, sin movimiento, sin render, sin rotacion real todavia.
+    Story 3.2 - piece_data: tabla de formas (rotacion 0) de las 7 piezas.
+    Sin spawn, sin render, sin movimiento, sin colision de forma, sin rotacion.
 
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
 #include "game_state.h"
 #include "board.h"
+#include "piece_data.h"
 
 extern char tilfont, palfont;
 extern char playfieldtiles, playfieldtiles_end;
@@ -77,6 +80,11 @@ int main(void)
     gs.piece.y = 0;
     consoleDrawText(1, 20, "PIECE TEST: %u %u %d %d",
                      gs.piece.type, gs.piece.rotation, gs.piece.x, gs.piece.y);
+
+    // Story 3.2 - minimal piece_data test: print a known cell of the I piece's
+    // rotation-0 shape (piece_shapes[0][1][0] should be 1). No spawn, no
+    // render, no movement, no shape collision, no rotation.
+    consoleDrawText(1, 22, "PIECE DATA TEST: %u", piece_shapes[0][1][0]);
 
     bgSetEnable(1);
     setScreenOn();
