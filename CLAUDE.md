@@ -56,11 +56,21 @@ Para este proyecto:
 
 ## Validation
 
-Cada Story debe terminar en este orden:
+El nivel mínimo de validación de cada Story lo determina su **clase**, declarada durante `/gds-create-story`. La política completa y la tabla de clasificación viven en `docs/BMAD_GAMEDEV_NATIVE_LOOP.md` — esa es la fuente de verdad.
 
-1. make
-2. Ejecutar en ares
-3. Esperar validación manual del desarrollador
-4. Solo entonces considerar la Story terminada
+Los tres niveles:
 
-Nunca asumir que una Story está completa únicamente porque compila.
+- **V0** — `make` en `snes/`.
+- **V1** — `python3 tools/harness/harness.py`. Harness automático; no requiere intervención humana.
+- **V2** — validación manual en el emulador por el desarrollador.
+
+Reglas operativas:
+
+1. Toda Story cuyo diff pueda alterar la ROM exige **V0 + V1** como mínimo.
+2. **V2 ya no es obligatoria en cada Story.** Solo la exigen las clases `render`, `audio`, `ux-hud`, `rendimiento`, `integracion`, `gate-epic` y `gate-rc`.
+3. Las Stories de lógica interna — clases `logica-interna`, `algoritmos`, `ia`, `contratos`, `herramientas` — se cierran con **V0 + V1**, sin abrir el emulador.
+4. Una Story de clase `documentacion` se cierra con **V0**: no puede alterar la ROM, así que V1 no aportaría información.
+5. El ejecutor no puede cambiar la clase declarada. Si cree que está mal, proponer `/gds-correct-course`.
+6. Toda Story cerrada sin V2 anota su deuda de validación manual, que el cierre de Epic consume. **El destino durable de ese registro está pendiente de definir** (ver "Requisitos para adopción" en `docs/BMAD_GAMEDEV_NATIVE_LOOP.md`); hasta que exista, anotarla en la propia Story.
+
+Nunca asumir que una Story está completa únicamente porque compila. Tampoco porque el harness dio PASS: la Review independiente re-ejecuta V0 y V1 por su cuenta, y es quien cierra la Story.
