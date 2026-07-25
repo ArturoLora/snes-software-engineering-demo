@@ -52,6 +52,40 @@ cd snes && ares apotris.sfc
 
 Solo obligatoria para las clases de Story que la exigen. La tabla que lo determina está en `docs/BMAD_GAMEDEV_NATIVE_LOOP.md`; el resumen operativo, en `CLAUDE.md` → "Validation".
 
+## Reproducción independiente de V0
+
+`make` sobre un árbol ya construido devuelve `No se hace nada para 'all'` con código
+0. **Eso no reproduce nada.** Un revisor que corra `make` para "re-ejecutar V0 por su
+cuenta" firma un no-op. Y la regla de no usar `make clean` cierra la salida obvia,
+porque limpiaría la ROM que queda lista para el emulador.
+
+Procedimiento correcto, cuando hace falta una compilación reproducida de verdad —
+Review, gate de Epic, o duda sobre si la ROM corresponde a las fuentes:
+
+```bash
+python3 tools/loop/rebuild_v0.py
+```
+
+Copia `snes/` a un directorio desechable, borra allí los artefactos generados
+—usando como fuente la lista que `.gitignore` ya declara—, compila desde cero, y
+compara la ROM resultante con la del árbol principal.
+
+**Nunca toca el árbol principal**, y lo comprueba tomando el md5 de **todos** los
+archivos bajo `snes/` antes y después: reporta cualquier archivo que aparezca,
+desaparezca o cambie, no solo la ROM.
+
+Tras purgar, verifica de forma independiente de `.gitignore` que no sobrevivió
+ningún `.obj`, `.sfc`, `.sym`, `.pic` ni `.pal`. Sin esa comprobación, un
+`.gitignore` incompleto dejaría objetos viejos en la copia y la ROM "reproducida"
+vendría en parte de binarios que nunca se recompilaron — un PASS falso.
+
+Código de salida `0` solo si la compilación limpia tuvo éxito, la ROM resultante
+coincide con la del árbol, y el árbol quedó intacto. Con `--keep` conserva el
+directorio de compilación para inspeccionarlo.
+
+Una ROM que no se puede reproducir desde las fuentes es un hallazgo, no un detalle:
+significa que lo validado en el emulador no es lo que el repositorio describe.
+
 ## Lo que NO existe
 
 Declarado explícitamente para que ningún rol lo busque ni lo suponga:
@@ -72,6 +106,7 @@ Base para derivar allowlists acotadas. Una allowlist se construye eligiendo de e
 | `snes/source/*.c`, `*.h` | Código de la ROM. Un módulo por sistema (`board`, `piece`, `render`, `input`, `test_status`, `test_runner`) | Ejecutor, en Stories de código |
 | `snes/*.png` | Assets fuente. `make` los convierte con `gfx4snes` | Ejecutor, en Stories de clase `render` |
 | `snes/Makefile`, `snes/hdr.asm`, `snes/data.asm` | Build y datos embebidos | Ejecutor, solo si la Story lo declara |
+| `tools/loop/` | Herramientas del BMAD Native Loop: gate de árbol sucio, reproducción de V0 | Ejecutor, en Stories de clase `herramientas` |
 | `tools/harness/` | Harness Python y su documentación | Ejecutor, en Stories de clase `herramientas` |
 | `tools/lua/` | Scripts Lua que el harness ejecuta dentro de BizHawk | Ejecutor, en Stories de clase `herramientas` |
 | `docs/` | Framework y capa de adaptación del Native Loop | Solo por decisión del orquestador humano |
@@ -178,6 +213,71 @@ El framework exige que cada Story declare el estado del repositorio contra el qu
 
 La Review compara contra ese hash — no contra `HEAD`, que puede haber avanzado.
 
+## Gate de árbol sucio
+
+Un commit como baseline no basta si el **árbol de trabajo** ya tenía cambios antes de empezar la Story: el diff mezcla el alcance real con la suciedad previa, y la Review solo puede decir *"veo cosas que no sé a quién atribuir"* en vez de *"no se tocó nada fuera de alcance"*.
+
+**Preferido:** empezar con el árbol limpio. Commitear o revertir lo pendiente antes de `Create Story`.
+
+**Cuando no es posible**, la suciedad se declara en lugar de ignorarse. En `Create Story`:
+
+```bash
+python3 tools/loop/story_baseline.py snapshot
+```
+
+Emite el bloque de frontmatter con `baseline_commit` y `baseline_dirty` — cada ruta que ya difería de `HEAD`, **con el md5 de su contenido en ese momento** —, obtenido del estado real del repositorio y no a mano. Avisa por stderr si el árbol está sucio y recomienda limpiarlo primero. Con el árbol limpio, `baseline_dirty` queda vacío y no hay ceremonia extra.
+
+```yaml
+baseline_dirty:
+  - path: CLAUDE.md
+    md5: 9b491b3f9b61a0a1df1b9ab4f610ec80
+```
+
+En la Review:
+
+```bash
+python3 tools/loop/story_baseline.py check <archivo-de-Story>
+```
+
+Calcula el **conjunto atribuible**: los archivos que difieren del baseline menos los declarados en `baseline_dirty`. **Ese conjunto, y no el diff completo, es lo que se audita contra la allowlist.**
+
+La resta es **por contenido, no solo por ruta**:
+
+| Estado de una ruta declarada | Qué hace `check` |
+|---|---|
+| Sigue difiriendo, md5 igual al declarado | Se resta. Es suciedad previa genuina |
+| Sigue difiriendo, **md5 distinto** | **No se resta.** Entra en el conjunto atribuible: el cambio es de la Story |
+| **Borrada** durante la Story | No se resta. Entra en el conjunto atribuible, con el md5 mostrado como `(borrado)` |
+| Ya **no** difiere del baseline | **FAIL con código 1.** Declaración obsoleta: podría estar ocultando un cambio real |
+| Declarada **sin `md5`** | **FAIL con código 1.** Sin hash no hay contenido que comparar, y restar por ruta devolvería el mecanismo al estado que el hash existe para cerrar. La clave debe ser exactamente `md5:`, en minúsculas y sin espacio antes de los dos puntos — `md5 :` y `MD5:` no se reconocen. La sangría es libre: espacios o tabuladores dan igual |
+
+Cualquiera de esos fallos devuelve código 1 y **no** imprime el `OK` final. Un `OK` junto a un hallazgo impreso encima sería peor que no comprobar nada.
+
+### Archivos que Git ignora
+
+`check` también lista los archivos ignorados que **no** son artefactos de build conocidos, y falla si encuentra alguno. Motivo: las rutas ignoradas son invisibles al conjunto atribuible, así que un archivo dentro de `build/`, `out/`, o de un directorio creado con un `.gitignore` anidado que se ignora a sí mismo, podría esconder cambios fuera de alcance sin aparecer en ninguna parte.
+
+Los artefactos legítimamente ignorados están declarados en `tools/loop/story_baseline.py`. Añadir una clase nueva exige declararla ahí, de forma explícita y revisable. Dos categorías, con alcances distintos a propósito:
+
+- **Salidas del build**, acotadas al prefijo `snes/`. Un sufijo válido en cualquier ruta convertiría a cualquier archivo llamado `x.map` o `x.obj` en invisible en todo el repositorio.
+- **Directorios de material no-código**: `tools/harness/artifacts/`, `tools/BizHawk-*`, `reference/`, `_bmad/custom/`, más `__pycache__/` y los `.log`. Son **puntos ciegos aceptados y declarados**, no descuidos: contienen material arbitrario que no es código del proyecto. Cualquier cosa depositada ahí queda fuera del conjunto atribuible.
+
+### Archivos ocultos a `git status`
+
+`git update-index --assume-unchanged` y `--skip-worktree` sacan un archivo trackeado de `git diff` y de `git status`. Un `.c` fuera de alcance modificado bajo cualquiera de las dos banderas desaparecería del conjunto atribuible — la misma invisibilidad que las rutas ignoradas, por otra vía.
+
+`check` lista esos archivos y falla si encuentra alguno. Se quita la marca con `git update-index --no-assume-unchanged <ruta>` (o `--no-skip-worktree`) y se repite.
+
+### Detección de renames
+
+El cálculo usa `git diff --no-renames`. Con la detección activada, Git colapsa un par origen/destino en la ruta destino, de modo que **mover un archivo fuera de alcance a un directorio permitido lo hace desaparecer del conjunto atribuible**. Sin renames se ven las dos rutas, que es lo que la contención necesita.
+
+### Límite conocido del mecanismo
+
+Queda una vía: nada ata la declaración a un instante. Un ejecutor puede volver a ejecutar `snapshot` a mitad de Story y pegar el resultado, y los hashes se actualizarían al estado nuevo, blanqueando el cambio.
+
+Con hashes ese fraude deja de ser silencioso —exige reescribir a mano N valores en el frontmatter, y es un cambio visible y deliberado en el archivo de Story— pero **no es imposible**. Cerrarlo del todo exigiría commitear el frontmatter en `Create Story`, antes de que empiece la ejecución. Está registrado como trabajo diferido.
+
 ---
 
 # 7. Estado registrado del loop
@@ -209,6 +309,8 @@ Destino durable exigido por el framework para los hallazgos con disposición `de
 | `_bmad-output/game-architecture.md` | Diseño de módulos C, orden del frame loop, estrategia de VRAM |
 | `_bmad-output/planning-artifacts/epics.md` | FR/NFR, epics y Stories con criterios de aceptación |
 | `_bmad-output/implementation-artifacts/` | Archivos de Story e investigaciones |
+| `tools/loop/story_baseline.py` | Gate de árbol sucio: `snapshot` en Create Story, `check` en Review |
+| `tools/loop/rebuild_v0.py` | Reproducción independiente de V0 en copia desechable |
 | `tools/harness/README.md` | Uso del harness y limitaciones del emulador encontradas |
 | `tools/harness/TEST_STATUS.md` | Contrato de memoria ROM ↔ harness, y cómo localizarlo vía `.sym` |
 | `tools/harness/TEST_RUNNER.md` | Máquina de estados del Test Runner y registro de pruebas por `test_id` |

@@ -251,9 +251,33 @@ Para que la Review pueda auditar que el nivel usado coincide con la clase declar
 
 La Review añade tres comprobaciones a las que ya hacía. Ninguna sustituye a las existentes.
 
-1. **Coherencia clase ↔ diff.** El diff contra el baseline debe ser compatible con la clase declarada. **Una Story declarada `logica-interna`, `algoritmos`, `ia`, `contratos` o `herramientas` cuyo diff toca assets, render, audio, layout o timing es un hallazgo**, con la misma severidad que un archivo fuera de la allowlist. La clase no es una opinión: es una afirmación sobre el alcance, y el diff la confirma o la desmiente.
+1. **Coherencia clase ↔ diff.** El **conjunto atribuible** (ver abajo) debe ser compatible con la clase declarada. **Una Story declarada `logica-interna`, `algoritmos`, `ia`, `contratos` o `herramientas` cuyo diff toca assets, render, audio, layout o timing es un hallazgo**, con la misma severidad que un archivo fuera de la allowlist. La clase no es una opinión: es una afirmación sobre el alcance, y el diff la confirma o la desmiente.
 2. **Cobertura del nivel mínimo.** Todos los niveles que la tabla exige para esa clase tienen que estar ejecutados y registrados. Un nivel exigido y ausente bloquea el cierre; no se compensa con inspección estática.
 3. **Ejecución propia de V0 y V1.** La Review los corre por su cuenta, según la [regla de independencia del harness](#el-harness-no-reemplaza-la-review). Para V2 audita el **acta**, porque no puede reproducir una percepción humana.
+
+### Contención de alcance con árbol sucio
+
+El diff contra el baseline solo mide el alcance de la Story si el árbol estaba limpio al empezar. Si no lo estaba, la Story declara la suciedad previa y la Review **resta** ese conjunto antes de auditar:
+
+> **conjunto atribuible = (archivos que difieren del baseline) − (suciedad previa declarada)**
+
+Es ese conjunto, y no el diff completo, el que se compara contra la allowlist. Cómo se declara y con qué herramienta se calcula lo define el proyecto; en este repositorio está en `BOOTSTRAP.md` → "Gate de árbol sucio".
+
+Una ruta declarada que ya **no** difiere del baseline **bloquea**, en vez de avisar: la declaración quedó obsoleta y podría estar restando —y por tanto ocultando— un cambio que sí pertenece a la Story.
+
+> **La resta debe ser por contenido, no solo por ruta.** Restar por ruta no detecta que un archivo ya declarado sucio se modifique *aún más* durante la Story, ni que se borre: la ruta sigue difiriendo y se sigue restando, y el cambio queda blanqueado. La declaración de suciedad previa registra, por tanto, el **contenido** de cada ruta en el momento de declararla. Si ese contenido cambia después, la ruta entra en el conjunto atribuible en vez de restarse.
+>
+> Queda una vía que el contenido no cierra: mientras la declaración no esté atada a un instante inmutable, volver a generarla a mitad de Story la actualiza al estado nuevo. Con hashes ese fraude deja de ser silencioso —exige reescribir a mano cada valor, y es un cambio visible en el archivo de Story— pero sigue siendo posible. Cerrarlo del todo exige congelar la declaración antes de que empiece la ejecución.
+>
+> La distinción importa porque la lección 5 del framework advierte de confundir instrucción con contención. Un proyecto que declare esta parte "mecánica" sin hashes está describiendo disciplina, no mecanismo.
+
+### Reproducir V0 de verdad
+
+Un sistema de compilación incremental puede devolver éxito sin recompilar nada. Cuando eso pasa, "la Review re-ejecutó V0" es una afirmación vacía: el revisor obtuvo un código de salida correcto de un no-op.
+
+> **Regla.** La re-ejecución de V0 por parte de la Review debe partir de un estado sin artefactos generados, **sin limpiar el árbol de trabajo principal** — que debe quedar tal cual para la validación manual y para el emulador.
+
+La forma concreta la define el proyecto. El patrón que funciona es compilar en una copia desechable y comparar el binario resultante con el del árbol principal: además de reproducir V0, comprueba que lo que se validó en el emulador es lo que las fuentes describen. En este repositorio está en `BOOTSTRAP.md` → "Reproducción independiente de V0".
 
 Cuando la clase exigía V2 y la Review no encuentra acta, el AC perceptual correspondiente se declara **implementado pero no verificado** — regla ya existente del framework — y no se aprueba.
 
