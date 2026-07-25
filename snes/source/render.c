@@ -30,11 +30,11 @@ void render_init(void)
 }
 
 /* BoardState has 22 rows: 20 visible + 2 top buffer rows reserved for
-   spawn/top-out (game-architecture.md#4). The playfield BG (Story 1.2) shows
-   only those 20 visible rows, anchored to the screen's top-left corner, so a
-   board row needs 2 subtracted before becoming a screen pixel row - skipping
-   this offset would draw the piece 16px below where the playfield expects
-   it. */
+   spawn/top-out (game-architecture.md#4). A board row needs 2 subtracted to
+   become a playfield-relative screen row. Story 4.7 shifted the playfield BG
+   itself down 3 rows (to center the playfield+debug layout on screen,
+   snes/playfield.png), so the net conversion is -2+3 = +1 - skipping this
+   offset would draw the piece 24px above where the playfield BG now sits. */
 void render_sync_piece(GameState *gs, u8 active)
 {
     u8 row, col, slot;
@@ -55,7 +55,7 @@ void render_sync_piece(GameState *gs, u8 active)
             if (piece_shapes[gs->piece.type][row][col])
             {
                 u16 screen_x = (u16)((gs->piece.x + col) * 8);
-                u16 screen_y = (u16)((gs->piece.y + row - 2) * 8);
+                u16 screen_y = (u16)((gs->piece.y + row + 1) * 8);
                 u16 id = slot * OAM_ID_STEP;
 
                 oamSet(id, screen_x, screen_y, 3, 0, 0, 0, 0);

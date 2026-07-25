@@ -48,6 +48,13 @@
     lockeada por las pruebas de boot). Sin gravedad/lock en el loop, sin
     rotacion, sin DMA todavia.
 
+    Story 4.3 - contador de gravedad fijo (GRAVITY_TICK_FRAMES) dentro del
+    while(1): cada N cuadros llama piece_apply_gravity(&gs) directo, sin
+    envolverla en ninguna funcion nueva. Sin lock, sin spawn, sin cambios a
+    board.c/render.c/input.c - render_sync_piece(&gs,1) ya incondicional
+    cada frame (bloque de input, Story 4.2) refleja la caida sin llamada
+    nueva.
+
     Story 2.3 (roadmap original de epics.md, Epic 2) - board_detect_full_lines()/
     board_collapse_lines(): deteccion y colapso inmediato de filas completas,
     sin conectar todavia con piece_lock()/spawn/render/scoring/combo/top-out.
@@ -73,6 +80,11 @@ extern char playfieldmap, playfieldmap_end;
 
 unsigned short pad0;
 static GameState gs;
+
+/* Story 4.3: fixed frame interval between gravity ticks - no per-level Q8.8
+   gravity table (GravityState.speedFixed/speedCounter, game-architecture.md
+   #4) yet, that's explicitly out of scope. ~30 frames at 60fps == ~0.5s. */
+#define GRAVITY_TICK_FRAMES 30
 
 //---------------------------------------------------------------------------------
 int main(void)
@@ -105,8 +117,10 @@ int main(void)
     bgSetDisable(2);
 
     // Draw a wonderful text :P
-    consoleDrawText(6, 2, "Hello Apotris SNES");
-    consoleDrawText(3, 4, "PRESS A PAD BUTTON");
+    // Story 4.4 - debug text moved to column 11 (column 10 left as a gutter)
+    // so nothing overlaps the playfield's 10 columns (0-9).
+    consoleDrawText(11, 5, "Hello Apotris SNES");
+    consoleDrawText(11, 7, "PRESS A PAD BUTTON");
 
     // Stories 2.1/2.2/3.2 - board/collision/piece_data setup, unchanged: the
     // test cell (3,5) set here is still relied on by the Story 3.5 gravity
@@ -118,7 +132,7 @@ int main(void)
     // directly as varargs on this toolchain (consoleDrawText's %u/%d reader
     // always consumes 2 bytes per argument) - explicit widening casts are
     // required, or each argument after the first shifts by a byte.
-    consoleDrawText(1, 6, "B:%u C:%u/%u/%u D:%u",
+    consoleDrawText(11, 9, "B:%u C:%u/%u/%u D:%u",
                      (u16)board_get(&gs, 3, 5),
                      (u16)board_is_cell_occupied(&gs, 3, 5),
                      (u16)board_is_cell_occupied(&gs, 0, 0),
@@ -129,7 +143,7 @@ int main(void)
     // type=0, initial position). No movement, no render, no gravity, no
     // collision, no lock.
     piece_spawn(&gs);
-    consoleDrawText(1, 8, "PIECE: %u %u %d %d",
+    consoleDrawText(11, 11, "PIECE: %u %u %d %d",
                      (u16)gs.piece.type, (u16)gs.piece.rotation,
                      (s16)gs.piece.x, (s16)gs.piece.y);
     // Story 4.1 - sprites follow the just-spawned position.
@@ -161,9 +175,12 @@ int main(void)
         piece_move_right(&gs);
         x_after_blocked = (s16)gs.piece.x;
 
-        consoleDrawText(1, 10, "MOVE L:%d>%d R:%d>%d BLK:%d>%d",
+        // Story 4.4 - split across two rows (col 11 leaves only 21 columns,
+        // not enough for the full original one-line string).
+        consoleDrawText(11, 13, "MOVE L:%d>%d R:%d>%d",
                          x_before_left, x_after_left,
-                         x_before_right, x_after_right,
+                         x_before_right, x_after_right);
+        consoleDrawText(11, 14, "BLK:%d>%d",
                          x_before_blocked, x_after_blocked);
         // Story 4.1 - sprites follow the final position after movement.
         render_sync_piece(&gs, 1);
@@ -191,7 +208,7 @@ int main(void)
         piece_apply_gravity(&gs);
         y3 = (s16)gs.piece.y;
 
-        consoleDrawText(1, 12, "GRAV:%d>%d>%d>%d", y0, y1, y2, y3);
+        consoleDrawText(11, 15, "GRAV:%d>%d>%d>%d", y0, y1, y2, y3);
         // Story 4.1 - sprites follow the position after the gravity steps.
         render_sync_piece(&gs, 1);
     }
@@ -225,7 +242,7 @@ int main(void)
                     board_get(&gs, (u8)(gs.piece.x + col), (u8)(gs.piece.y + row)) != 0)
                     locked_count++;
 
-        consoleDrawText(1, 14, "LOCK X:%d Y:%d CNT:%u",
+        consoleDrawText(11, 17, "LOCK X:%d Y:%d CNT:%u",
                          (s16)gs.piece.x, (s16)gs.piece.y, (u16)locked_count);
         // Story 4.1 - hide the piece sprites immediately after lock.
         render_sync_piece(&gs, 0);
@@ -244,14 +261,28 @@ int main(void)
 
         {
             u16 detected = (u16)board_detect_full_lines(&gs);
-            consoleDrawText(1, 18, "LINES DET:%u ROW0:%u",
+            consoleDrawText(11, 21, "LINES DET:%u ROW0:%u",
                              detected, (u16)gs.lines.rows[0]);
         }
 
         board_collapse_lines(&gs);
-        consoleDrawText(1, 20, "LINES COLLAPSE ROW10:%u CNT:%u",
-                         (u16)board_get(&gs, 0, 10), (u16)gs.lines.count);
+        // Story 4.4 - split across two rows (same width reason as the MOVE
+        // test above).
+        consoleDrawText(11, 23, "COLLAPSE R10:%u",
+                         (u16)board_get(&gs, 0, 10));
+        consoleDrawText(11, 24, "CNT:%u", (u16)gs.lines.count);
     }
+
+    // Story 4.3 - clean board before the live game loop: confirmed by
+    // diagnostic (board dump showed R5=0001111000) that the boot-time tests
+    // above (lock test, Story 3.6/3.7; line-clear collapse, Story 2.3) leave
+    // real occupied cells behind - the interactive piece's second gravity
+    // step was colliding against that invisible residue (nothing is drawn to
+    // the tilemap yet, Story 4.3/DMA not implemented). board_init() already
+    // exists (Story 2.1) and is reused as-is - this only removes the
+    // dependency of the live loop on the boot tests' leftover board state;
+    // the boot tests themselves are untouched above.
+    board_init(&gs);
 
     // Story 4.2 - fresh spawn for the interactive loop below: the boot-time
     // tests above already locked their own test piece (piece_lock(), Story
@@ -263,6 +294,9 @@ int main(void)
 
     bgSetEnable(1);
     setScreenOn();
+
+    {
+        u16 gravity_frame_counter = 0;
 
     while (1)
     {
@@ -281,6 +315,19 @@ int main(void)
             render_sync_piece(&gs, 1);
         }
 
+        // Story 4.3 - fixed-interval gravity tick: calls piece_apply_gravity
+        // directly (no composed function). No-op if it collides - that's
+        // already piece_apply_gravity's existing contract (Story 3.5/3.7).
+        // No lock, no spawn, no board writes from here. render_sync_piece
+        // above already runs unconditionally every frame, so the position
+        // change is reflected without an extra render call.
+        gravity_frame_counter++;
+        if (gravity_frame_counter >= GRAVITY_TICK_FRAMES)
+        {
+            gravity_frame_counter = 0;
+            piece_apply_gravity(&gs);
+        }
+
         // Get current #0 pad
         pad0 = padsCurrent(0);
 
@@ -288,47 +335,48 @@ int main(void)
         switch (pad0)
         {
         case KEY_A:
-            consoleDrawText(6, 16, "A PRESSED     ");
+            consoleDrawText(11, 19, "A PRESSED     ");
             break;
         case KEY_B:
-            consoleDrawText(6, 16, "B PRESSED     ");
+            consoleDrawText(11, 19, "B PRESSED     ");
             break;
         case KEY_SELECT:
-            consoleDrawText(6, 16, "SELECT PRESSED");
+            consoleDrawText(11, 19, "SELECT PRESSED");
             break;
         case KEY_START:
-            consoleDrawText(6, 16, "START PRESSED ");
+            consoleDrawText(11, 19, "START PRESSED ");
             break;
         case KEY_RIGHT:
-            consoleDrawText(6, 16, "RIGHT PRESSED ");
+            consoleDrawText(11, 19, "RIGHT PRESSED ");
             break;
         case KEY_LEFT:
-            consoleDrawText(6, 16, "LEFT PRESSED  ");
+            consoleDrawText(11, 19, "LEFT PRESSED  ");
             break;
         case KEY_DOWN:
-            consoleDrawText(6, 16, "DOWN PRESSED  ");
+            consoleDrawText(11, 19, "DOWN PRESSED  ");
             break;
         case KEY_UP:
-            consoleDrawText(6, 16, "UP PRESSED    ");
+            consoleDrawText(11, 19, "UP PRESSED    ");
             break;
         case KEY_R:
-            consoleDrawText(6, 16, "R PRESSED     ");
+            consoleDrawText(11, 19, "R PRESSED     ");
             break;
         case KEY_L:
-            consoleDrawText(6, 16, "L PRESSED     ");
+            consoleDrawText(11, 19, "L PRESSED     ");
             break;
         case KEY_X:
-            consoleDrawText(6, 16, "X PRESSED     ");
+            consoleDrawText(11, 19, "X PRESSED     ");
             break;
         case KEY_Y:
-            consoleDrawText(6, 16, "Y PRESSED     ");
+            consoleDrawText(11, 19, "Y PRESSED     ");
             break;
         default:
-            consoleDrawText(6, 16, "              ");
+            consoleDrawText(11, 19, "              ");
             break;
         }
 
         WaitForVBlank();
+    }
     }
 
     return 0;

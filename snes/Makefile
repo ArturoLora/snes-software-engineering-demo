@@ -37,3 +37,11 @@ piece.pic: piece.png
 	$(GFXCONV) -s 8 -o 16 -u 16 -e 0 -p -i $<
 
 bitmaps : pvsneslibfont.pic playfield.pic piece.pic
+
+#---------------------------------------------------------------------------------
+# Story 4.6 fix: data.asm embeds these via .incbin - Make doesn't parse
+# .incbin, so without this prerequisite it only reassembles data.obj when
+# data.asm itself changes, silently linking stale graphics into the ROM when
+# only a .pic/.map/.pal asset changes. Prerequisites-only (no recipe) - the
+# actual compile recipe for data.obj still comes from snes_rules, untouched.
+data.obj: pvsneslibfont.pic pvsneslibfont.pal playfield.pic playfield.map playfield.pal piece.pic piece.pal
