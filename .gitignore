@@ -32,3 +32,12 @@ snes/*.inc
 snes/*_data.as
 snes/linkfile
 snes/source/*.obj
+
+# Test harness: el emulador se instala localmente, no se versiona (243 MB)
+tools/BizHawk-*/
+tools/BizHawk-*.tar.gz
+
+# Test harness: artefactos de ejecucion, se reescriben en cada corrida
+tools/harness/artifacts/
+tools/lua/*.log
+__pycache__/

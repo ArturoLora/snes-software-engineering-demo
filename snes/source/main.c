@@ -72,6 +72,7 @@
 #include "piece.h"
 #include "render.h"
 #include "input.h"
+#include "test_runner.h"
 
 extern char tilfont, palfont;
 extern char playfieldtiles, playfieldtiles_end;
@@ -89,6 +90,14 @@ static GameState gs;
 //---------------------------------------------------------------------------------
 int main(void)
 {
+    // Test Runner: publica el contrato TestStatus (magic/version/IDLE) y
+    // arranca la prueba de infraestructura. No es logica de juego - no toca
+    // gravedad, movimiento, colisiones ni generacion de piezas; solo escribe
+    // TestStatus en WRAM para que el Test Harness pueda leerlo. El runner es
+    // el unico componente autorizado a tocar esa estructura.
+    test_runner_init();
+    test_runner_start(TEST_ID_SELFCHECK);
+
     // Initialize text console with our font
     consoleSetTextMapPtr(0x6800);
     consoleSetTextGfxPtr(0x3000);
@@ -300,6 +309,11 @@ int main(void)
 
     while (1)
     {
+        // Test Runner: avanza la prueba en curso, si hay alguna. No-op cuando
+        // el runner no esta en RUNNING, asi que no afecta al frame loop del
+        // juego. Escribe solo TestStatus.
+        test_runner_update();
+
         // Story 4.2 - real pad input drives the active piece (Story 3.3/3.4
         // movement contract), replacing the debug-only simulated input used
         // by every story up to now. input.c is the sole boundary with
