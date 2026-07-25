@@ -136,6 +136,53 @@ Todas ignoradas por Git (ver `.gitignore`). Un diff que las incluya es señal de
 | `_bmad-output/implementation-artifacts/*.md` | Stories ya redactadas, una por archivo |
 | `_bmad-output/implementation-artifacts/investigations/` | Investigaciones que pueden generar candidatos |
 
+## Numeración: el plan y la ejecución no coinciden
+
+`epics.md` numera **lo planificado**. Los archivos de
+`implementation-artifacts/` numeran **lo ejecutado**, en orden, dentro de cada Epic.
+Son dos secuencias distintas y **divergieron**.
+
+> **Regla.** El número de un archivo de Story es `<epic>-<n>`, correlativo por orden
+> de ejecución dentro del Epic. **No es la clave de `epics.md`.** Citar "Story 4.3"
+> a secas es ambiguo: hay que decir "Story 4.3 de `epics.md`" o
+> `4-3-gravedad-automatica.md`.
+
+El caso concreto que obliga a esta regla: **`epics.md` Story 4.3 es el DMA del
+tilemap y sigue sin ejecutarse**, mientras que `4-3-gravedad-automatica.md` es la
+gravedad en el bucle. Mismo número, cosas distintas.
+
+La divergencia tiene dos causas, ambas legítimas: `epics.md` Story 3.1 se partió en
+tres Stories de implementación al ejecutarla, lo que desplazó el resto del Epic 3; y
+el Epic 4 acumuló cinco Stories de layout y de corrección de build que el plan no
+preveía.
+
+### Trazabilidad
+
+| `epics.md` | Archivo de Story | Estado |
+|---|---|---|
+| 1.1 Boot | `1-1-boot-infraestructura-minima` | ejecutada |
+| 1.2 Playfield vacío | `1-2-playfield-vacio` | ejecutada |
+| 2.1 Estructuras y tablero | `2-1-tablero-logico` | ejecutada |
+| 2.2 Colisión | `2-2-colision-basica` | ejecutada |
+| 2.3 Detección y colapso de líneas | `2-3-line-clear` | ejecutada — primitivas sueltas, sin conectar al ciclo |
+| 3.1 Tabla de formas y spawn | `3-1-estado-pieza-activa`, `3-2-datos-piezas`, `3-3-spawn-inicial` | ejecutada, **partida en tres** |
+| 3.2 Cola 7-bag | — | **no ejecutada** |
+| 3.3 Movimiento horizontal | `3-4-movimiento-horizontal` | ejecutada |
+| 3.4 Gravedad Q8.8 | `3-5-gravedad`, `4-3-gravedad-automatica` | **parcial** — paso fijo cada 30 frames; sin acumulador Q8.8 ni velocidad por nivel |
+| 3.5 Lock | `3-6-lock-pieza` | ejecutada — `piece_lock()` existe, no se llama desde el bucle |
+| 3.6 Line clear integrado al ciclo de lock | — | **no ejecutada** |
+| 4.1 Sprites OAM | `4-1-render-pieza-sprites` | ejecutada |
+| 4.2 Input del pad | `4-2-input-real-pad` | ejecutada |
+| 4.3 DMA del tilemap | — | **no ejecutada** — última Story del plan |
+
+Stories ejecutadas **sin entrada en `epics.md`**: `3-7-pieza-forma-completa`
+(refactor de colisión y lock a la forma completa), `4-4-layout-playfield-definitivo`,
+`4-5-fix-ancho-tilemap-playfield`, `4-6-fix-dependencias-build-dataobj`,
+`4-7-centrar-layout-visual`. Más las dos Stories de proceso, `smoke-1-` y
+`process-1-`, que por definición no proceden del plan.
+
+**El siguiente archivo de Story del Epic 4 es `4-8-…`.** El `4-3` está ocupado.
+
 > **Pendiente declarado.** Este proyecto **no tiene `sprint-status.yaml`**. Los workflows GDS lo esperan en `_bmad-output/implementation-artifacts/sprint-status.yaml` y, al no encontrarlo, degradan a seguimiento solo en el archivo de Story. El comando para generarlo es `/gds-sprint-planning`. Mientras no exista, la selección de la siguiente Story es una decisión explícita del orquestador humano, no un dato del repositorio.
 
 ---
