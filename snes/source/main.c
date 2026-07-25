@@ -59,6 +59,15 @@
     board_collapse_lines(): deteccion y colapso inmediato de filas completas,
     sin conectar todavia con piece_lock()/spawn/render/scoring/combo/top-out.
 
+    Story 4.8 - ciclo de juego continuo. El bucle cierra lock -> tablero ->
+    render -> siguiente pieza: cuando piece_is_landed() (nueva en piece.c)
+    dice que la pieza no puede bajar mas, se llama piece_lock(),
+    render_sync_board() y piece_spawn(). render.c gana un espejo del tilemap
+    del playfield en WRAM que se vuelca a VRAM con dmaCopyVram() al principio
+    del bucle - el unico DMA del juego, y solo cuando un lock lo marco
+    pendiente. Sin line clear, sin 7-bag (piece_spawn sigue dando type=0),
+    sin gravedad Q8.8, sin lock delay, sin top-out, sin rotacion.
+
     Nota de layout (post-3.5): las pruebas de debug de todas las stories
     excedian la altura visible de la consola (filas hasta 32). Se
     condensaron/reordenaron para que todas quepan a la vez (filas 2-16) -
@@ -120,6 +129,11 @@ int main(void)
     // Story 4.1 - active piece sprite graphics (single placeholder tile),
     // once at boot, before setMode/setScreenOn (game-architecture.md#9).
     render_init();
+
+    // Story 4.8 - seed the WRAM mirror of the playfield tilemap from the map
+    // just handed to bgInitMapSet. Same timing constraint as render_init():
+    // after the BG is initialised, before setScreenOn().
+    render_board_init();
 
     // Now put in 16 color mode and disable the unused Bg
     setMode(BG_MODE1, 0);
@@ -301,6 +315,23 @@ int main(void)
     piece_spawn(&gs);
     render_sync_piece(&gs, 1);
 
+    // Story 4.8 - the board_init() above wiped the boot tests' leftover cells,
+    // so bake that clean state into the mirror before the first frame. Without
+    // this the mirror would still hold whatever the ROM map defines while the
+    // logical board says empty - they must agree from frame zero.
+    render_sync_board(&gs);
+
+    // Story 4.8 (Review H1) - push that first bake NOW, while the screen is
+    // still in forced blank. Leaving it to the loop's render_flush_board()
+    // would run the transfer before the first WaitForVBlank(), i.e. at an
+    // arbitrary point of a frame with display active, and VRAM writes are
+    // dropped by the hardware there. It happens to be harmless today only
+    // because an empty board bakes back to the asset's own bytes - the moment
+    // the initial board is not empty, the first image would depend on an
+    // invalid DMA. Also clears the pending flag, so the loop's first flush is
+    // the no-op it should be.
+    render_flush_board();
+
     bgSetEnable(1);
     setScreenOn();
 
@@ -309,6 +340,13 @@ int main(void)
 
     while (1)
     {
+        // Story 4.8 - the only VRAM transfer in the game. Sits here, at the
+        // top of the loop, because that is immediately after the previous
+        // iteration's WaitForVBlank() (game-architecture.md#8). No-op unless a
+        // lock marked the mirror pending, so movement and gravity never
+        // trigger DMA.
+        render_flush_board();
+
         // Test Runner: avanza la prueba en curso, si hay alguna. No-op cuando
         // el runner no esta en RUNNING, asi que no afecta al frame loop del
         // juego. Escribe solo TestStatus.
@@ -340,6 +378,23 @@ int main(void)
         {
             gravity_frame_counter = 0;
             piece_apply_gravity(&gs);
+
+            // Story 4.8 - close the game cycle. piece_is_landed() owns the
+            // rule (piece.c); main.c only sequences lock -> bake -> spawn. No
+            // line clear and no top-out handling - both out of scope.
+            //
+            // (Review H6) Checked right after the gravity step, on the same
+            // tick: a piece that reaches its resting row locks immediately,
+            // it does NOT get a tick of grace. The intermediate row is never
+            // observed. The only case that waits a tick is a piece that ends
+            // up supported by a horizontal move between two ticks. There is
+            // no lock delay, and this is not one.
+            if (piece_is_landed(&gs))
+            {
+                piece_lock(&gs);
+                render_sync_board(&gs);
+                piece_spawn(&gs);
+            }
         }
 
         // Get current #0 pad

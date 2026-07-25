@@ -9,8 +9,8 @@
 -- Direcciones derivadas de snes/apotris.sym (generado por wlalink) y del layout
 -- de GameState en snes/source/game_state.h:
 --
---   007e2000  pad0                        (u16, PVSnesLib pad state)
---   007e2002  tccs_source/main.asm_gs     (GameState gs)
+--   007e2805  pad0                        (u16, PVSnesLib pad state)
+--   007e2807  tccs_source/main.asm_gs     (GameState gs)
 --
 --   GameState {
 --     BoardState  board;   // u8[22][10]  -> offset   0 .. 219
@@ -18,12 +18,34 @@
 --     LinesToClear lines;  // u8[4], u8   -> offset 224 .. 228
 --   }                                     // total 229 bytes
 --
--- Verificacion del layout: el siguiente simbolo en el .sym es 007e20e7
--- (tccs_libc_c.asm_msys) y 0x7e2002 + 229 = 0x7e20e7 -> sin padding.
+-- Verificacion del layout: el siguiente simbolo en el .sym es 007e28ec
+-- (test_status) y 0x7e2807 + 229 = 0x7e28ec -> sin padding.
+--
+-- ADVERTENCIA (hallazgo G1, Story 4-8). Estas dos direcciones son CONSTANTES
+-- PEGADAS A MANO, y eso es un defecto conocido, no una decision.
+--
+-- Cualquier Story que anada una variable en WRAM desplaza el layout y las
+-- invalida. Cuando eso pasa, este script lee memoria arbitraria y el harness
+-- SIGUE DEVOLVIENDO PASS: sus criterios (>=2 lecturas, >=180 frames, "estado de
+-- juego visto") se satisfacen igual de bien con basura. Es para V1 lo que el
+-- hallazgo H4 era para V0: un nivel exigido que devuelve exito sin medir nada.
+--
+-- Ya ocurrio una vez: la Story 4-8 anadio un buffer de 2048 bytes que se asigno
+-- en $7E2000 y empujo pad0 de $7E2000 a $7E2805 y gs de $7E2002 a $7E2807. La
+-- unica senal fue que las cifras del harness cambiaron de 14 lecturas / 203
+-- frames a 6 / 186.
+--
+-- El arreglo real es resolver ambos simbolos desde apotris.sym en tiempo de
+-- ejecucion — los dos existen ahi con nombre. Queda registrado como G1 y
+-- pendiente de su propia Story de clase `herramientas`.
+--
+-- Mientras tanto: si el log muestra valores congelados o incoherentes con el
+-- juego, comprobar ESTO ANTES que nada:
+--     grep -iE "^007e.* (pad0|main.asm_gs)" snes/apotris.sym
 --------------------------------------------------------------------------------
 
-local BUS_PAD0 = 0x7E2000
-local BUS_GS   = 0x7E2002
+local BUS_PAD0 = 0x7E2805
+local BUS_GS   = 0x7E2807
 
 local OFF_PIECE_TYPE     = 220
 local OFF_PIECE_ROTATION = 221

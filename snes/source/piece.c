@@ -65,6 +65,18 @@ void piece_apply_gravity(GameState *gs)
         gs->piece.y = new_y;
 }
 
+/* Story 4.8: the piece is resting when it cannot fall one more step. Adapted
+   from the same checkRotation(0,1,rotation) test Apotris Game::update() uses
+   to decide whether the lock timer should run (tetrisEngine.cpp:543-559) -
+   here it decides the lock outright, because there is no lock delay yet.
+   Lives in piece.c and not in main.c: this is a game rule, and main.c holds
+   none (game-architecture.md#2). Reuses the existing shape collision. */
+u8 piece_is_landed(GameState *gs)
+{
+    return piece_shape_collides(gs, gs->piece.type, gs->piece.x,
+                                (s8)(gs->piece.y + 1));
+}
+
 /* Adapted from the board-write section of Apotris Game::place()
    (tetrisEngine.cpp:655-696): board[y][x] = pawn.current + shape_bits, looped
    over the 4x4 shape. Now writes all occupied cells of piece_shapes[type]
