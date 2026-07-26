@@ -1,14 +1,18 @@
 #include "piece.h"
 #include "board.h"
 #include "piece_data.h"
+#include "queue.h"
 
 /* Adapted from Apotris Game::next() (reference/apotris/source/tetrisEngine.cpp:1202-1274):
-   initial position only (pawn.y = lengthY/2, pawn.x = lengthX/2-2). No queue/7-bag
-   yet, so type is temporarily fixed to 0. No collision/top-out check, no lock,
-   no render, no movement, no gravity — those belong to future stories. */
+   initial position only (pawn.y = lengthY/2, pawn.x = lengthX/2-2). No
+   collision/top-out check, no lock, no render, no movement, no gravity — those
+   belong to future stories.
+
+   Story 3.8: the type now comes from the 7-bag. piece.c does not decide which
+   piece comes out and does not touch the bag's internals - queue.c owns that. */
 void piece_spawn(GameState *gs)
 {
-    gs->piece.type = 0;
+    gs->piece.type = queue_next(gs);
     gs->piece.rotation = 0;
     gs->piece.x = BOARD_WIDTH / 2 - 2;
     gs->piece.y = 2;

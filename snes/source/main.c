@@ -81,6 +81,7 @@
 #include "piece.h"
 #include "render.h"
 #include "input.h"
+#include "queue.h"
 #include "test_runner.h"
 
 extern char tilfont, palfont;
@@ -95,6 +96,51 @@ static GameState gs;
    gravity table (GravityState.speedFixed/speedCounter, game-architecture.md
    #4) yet, that's explicitly out of scope. ~30 frames at 60fps == ~0.5s. */
 #define GRAVITY_TICK_FRAMES 30
+
+/* Story 3.8 - the CURRENT bag, as drawn so far. It is the evidence epics.md
+   Story 3.2 asks for: "each group of 7 consecutive pieces contains each type
+   exactly once", checkable straight off the text console.
+
+   (Review H2) It must be aligned to the bag, not a rolling window of the last
+   seven. A 7-piece window that straddles a bag boundary is not a permutation
+   of 0..6, and straddling is the normal case - measured at 79% of windows - so
+   a rolling line would show the AC failing four times out of five while the
+   code was perfectly correct. Alignment is detected off bag_count: right after
+   the first draw of a fresh bag exactly SIZE-1 types are left.
+
+   (Review H1) Slots not drawn yet hold SPAWN_LOG_EMPTY rather than whatever
+   was in WRAM. Two reasons: this toolchain does NOT zero BSS - a static u8
+   here was measured reading 0x55 on real hardware - and a fixed-width line
+   stops consoleDrawText, which does not pad, from leaving stale glyphs behind
+   when the string shrinks. */
+#define SPAWN_LOG_SIZE 7
+#define SPAWN_LOG_EMPTY 9 /* one digit, and never a valid piece type (0-6) */
+
+static u8 spawn_log[SPAWN_LOG_SIZE];
+static u8 spawn_log_n;
+
+static void spawn_log_reset(void)
+{
+    u8 i;
+
+    for (i = 0; i < SPAWN_LOG_SIZE; i++)
+        spawn_log[i] = SPAWN_LOG_EMPTY;
+    spawn_log_n = 0;
+}
+
+static void spawn_log_push(GameState *g)
+{
+    if (g->queue.bag_count == SPAWN_LOG_SIZE - 1)
+        spawn_log_reset();
+
+    if (spawn_log_n < SPAWN_LOG_SIZE)
+        spawn_log[spawn_log_n++] = g->piece.type;
+
+    consoleDrawText(11, 26, "BAG %u%u%u%u%u%u%u",
+                    (u16)spawn_log[0], (u16)spawn_log[1], (u16)spawn_log[2],
+                    (u16)spawn_log[3], (u16)spawn_log[4], (u16)spawn_log[5],
+                    (u16)spawn_log[6]);
+}
 
 //---------------------------------------------------------------------------------
 int main(void)
@@ -165,7 +211,16 @@ int main(void)
     // Story 3.3 - minimal spawn test: piece_spawn() sets gs.piece (fixed
     // type=0, initial position). No movement, no render, no gravity, no
     // collision, no lock.
+    // Story 3.8 - the bag starts empty; the first refill happens on the first
+    // queue_next(), i.e. on the first spawn below.
+    queue_init(&gs);
+
     piece_spawn(&gs);
+    // Story 3.8 - the boot tests below were written for the I piece's geometry
+    // (the BLK case relies on where the I's occupied row reaches). With a
+    // random type they would stop checking what they claim to check, so the
+    // type is pinned here. The live loop past setScreenOn() uses the bag.
+    gs.piece.type = 0;
     consoleDrawText(11, 11, "PIECE: %u %u %d %d",
                      (u16)gs.piece.type, (u16)gs.piece.rotation,
                      (s16)gs.piece.x, (s16)gs.piece.y);
@@ -220,6 +275,7 @@ int main(void)
     // shows gravity falling then correctly stopping). No pad, no lock, no
     // top-out, no line clear, no render.
     piece_spawn(&gs);
+    gs.piece.type = 0; // Story 3.8 - same reason as above: pinned for the test
     {
         s16 y0, y1, y2, y3;
 
@@ -340,6 +396,13 @@ int main(void)
 
     while (1)
     {
+        // Story 3.8 - burn one rand() per frame. PVSnesLib has no srand(), so
+        // the generator emits the same stream after every reset; the only way
+        // to vary the sequence is to consume a different NUMBER of values
+        // before each bag refill. Together with the lazy refill, that makes
+        // every bag past the first depend on when the player let pieces land.
+        rand();
+
         // Story 4.8 - the only VRAM transfer in the game. Sits here, at the
         // top of the loop, because that is immediately after the previous
         // iteration's WaitForVBlank() (game-architecture.md#8). No-op unless a
@@ -394,6 +457,7 @@ int main(void)
                 piece_lock(&gs);
                 render_sync_board(&gs);
                 piece_spawn(&gs);
+                spawn_log_push(&gs);
             }
         }
 
