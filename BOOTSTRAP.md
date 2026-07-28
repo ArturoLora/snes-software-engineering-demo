@@ -1,4 +1,4 @@
-# BOOTSTRAP — Apotris SNES
+# BOOTSTRAP — SNES Technical Demo
 
 | | |
 |---|---|
@@ -6,7 +6,7 @@
 | **Estado** | Vigente |
 | **Fecha** | 2026-07-25 |
 | **Framework** | `docs/BMAD_NATIVE_LOOP.md` v1.3 |
-| **Capa de adaptación** | `docs/BMAD_GAMEDEV_NATIVE_LOOP.md` v1.1 |
+| **Capa de adaptación** | `docs/BMAD_GAMEDEV_NATIVE_LOOP.md` v1.3 |
 
 Este archivo es el **único punto de entrada** que el BMAD Native Loop consume para obtener el contexto de este proyecto. No redefine el framework: lo alimenta.
 
@@ -205,6 +205,8 @@ Stories ejecutadas **sin entrada en `epics.md`**: `3-7-pieza-forma-completa`
 ## Restricciones vinculantes
 
 La lista completa está en `_bmad-output/project-context.md` y `CLAUDE.md`. Las que más condicionan a un ejecutor:
+
+> **TODO — contradicción conocida, no corregible desde aquí.** La sección "Validation" de `_bmad-output/project-context.md` todavía describe el flujo superado (`make` → ares → validación manual en **cada** Story) y declara la versión de PVSnesLib como "pendiente de fijar". La política vigente es la de tres niveles V0/V1/V2 por clase (`docs/BMAD_GAMEDEV_NATIVE_LOOP.md`, `CLAUDE.md` → "Validation"), y el toolchain lleva instalado desde la Story 1.1. **No se corrige aquí porque `project-context.md` es un artefacto BMAD y solo se mantiene mediante workflows BMAD.** Ante contradicción, mandan este archivo y `CLAUDE.md`.
 
 1. **No es un port mecánico.** `reference/apotris/` es C++/devkitARM/libtonc para GBA: se adaptan algoritmos y tablas de datos, nunca la sintaxis. Sin clases, sin `std::list`, sin `std::tuple`.
 2. **Solo la Story actual.** No adelantar Stories futuras ni introducir abstracciones especulativas. La implementación más pequeña que satisfaga los AC.
