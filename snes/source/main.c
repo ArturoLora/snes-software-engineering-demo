@@ -455,6 +455,23 @@ int main(void)
             if (piece_is_landed(&gs))
             {
                 piece_lock(&gs);
+
+                // Story 4.9 - line clear, wired between the lock and the bake.
+                // The order is the point: detecting and collapsing BEFORE
+                // render_sync_board() means the DMA of this same frame already
+                // shows the collapsed board, so the completed row is never
+                // drawn. board.c's primitives (Story 2.3) are used as they are.
+                {
+                    // board_collapse_lines() zeroes gs.lines.count, so the
+                    // count has to be read before calling it.
+                    u16 cleared = (u16)board_detect_full_lines(&gs);
+
+                    if (cleared)
+                        board_collapse_lines(&gs);
+
+                    consoleDrawText(11, 25, "CLR %u", cleared);
+                }
+
                 render_sync_board(&gs);
                 piece_spawn(&gs);
                 spawn_log_push(&gs);
