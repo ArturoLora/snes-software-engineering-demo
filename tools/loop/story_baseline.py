@@ -83,9 +83,10 @@ def dirty_paths() -> list[str]:
     return sorted(paths)
 
 
-# Rutas ignoradas por Git que SI son fuera-de-alcance legitimo: artefactos de build
-# y de ejecucion. Cualquier otra ruta ignorada se reporta, porque un ejecutor podria
-# esconder codigo dentro de un directorio ignorado y quedar invisible al alcance.
+# Rutas ignoradas por Git que SI son fuera-de-alcance legitimo. Cualquier otra ruta
+# ignorada se reporta, porque un ejecutor podria esconder codigo dentro de un
+# directorio ignorado y quedar invisible al alcance.
+#
 # Salidas del build. Acotadas a snes/ a proposito: si el sufijo valiera en
 # cualquier ruta, un archivo con contenido arbitrario llamado x.map o x.obj seria
 # invisible al alcance en todo el repositorio.

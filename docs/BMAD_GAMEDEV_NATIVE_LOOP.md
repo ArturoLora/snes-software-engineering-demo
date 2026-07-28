@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Versión** | v1.1 (capa de adaptación) |
+| **Versión** | v1.3 (capa de adaptación) |
 | **Estado** | **Listo para adopción** — operativo una vez completados los [Requisitos para adopción](#requisitos-para-adopción) |
 | **Fecha** | 2026-07-25 |
 | **Alcance** | Adaptación del BMAD Native Loop a proyectos BMAD Game Development Studio |
@@ -31,8 +31,10 @@ Esta capa **no toca** ninguno de los siguientes elementos del framework. Se list
 | Gate de Bootstrap y su alcance de evaluación | **Sin cambios** |
 | Aislamiento entre ejecución y verificación | **Sin cambios** |
 | Baseline de comparación | **Sin cambios** |
+| Independencia de la Review respecto del ejecutor | **Sin cambios** — vale en los tres niveles de Review |
+| Regla del suelo de validación (V0 + V1) | **Sin cambios** — vale en los tres niveles de Review |
 
-Lo único que esta capa aporta es: **(a)** qué comando concreto ejecuta cada fase en un proyecto GDS, y **(b)** con qué instrumentos se produce la evidencia de la fase de verificación. Ambas cosas son, por diseño del framework, plano de **proyecto**, no de framework.
+Lo único que esta capa aporta es: **(a)** qué comando concreto ejecuta cada fase en un proyecto GDS, **(b)** con qué instrumentos se produce la evidencia de la fase de verificación, y **(c)** desde v1.2, con cuánto esfuerzo y con qué frecuencia de parada se ejecuta el loop — la [política de ejecución](#política-de-ejecución--sprint-mode-y-review-por-riesgo). Las tres son, por diseño del framework, plano de **proyecto**, no de framework.
 
 ---
 
@@ -323,6 +325,215 @@ Un harness que devuelve `PASS` en cada Story es, estadísticamente, indistinguib
 Ejemplos de comprobación válida, elegibles según lo que el proyecto tenga: introducir temporalmente un valor esperado incorrecto y confirmar el `FAIL`; apuntar el harness a un símbolo inexistente y confirmar que reporta el hueco en lugar de aprobar por defecto.
 
 > **Restricción de rol.** La comprobación de señal **no se ejecuta dentro de una sesión de Review**. Modifica el árbol de trabajo — aunque sea de forma temporal y reversible — y el alcance de escritura del revisor es únicamente su propio artefacto de reporte (lección 11 del framework). Es una actividad del **gate de Epic**, ejecutada por el orquestador humano o como Story propia de clase `herramientas`, con su propio ciclo del loop.
+
+---
+
+# Política de ejecución — Sprint Mode y Review por riesgo
+
+Esta sección cambia **cuándo se detiene el loop** y **cuánto esfuerzo gasta la Review**. No cambia qué se verifica, ni quién tiene autoridad, ni el orden de las cinco fases.
+
+> **Qué NO cambia, y es comprobable leyendo lo de arriba.** La regla del suelo (V0 + V1 para toda Story que pueda alterar la ROM). La tabla de clases y los niveles de validación que derivan de ella. El orden de autoridad. **La independencia de la Review: en los tres niveles la ejecuta un rol distinto del ejecutor, y en los tres re-ejecuta V0 y V1 por su cuenta.** Ningún rol se verifica a sí mismo, en ningún nivel.
+>
+> Lo que se ajusta es el **alcance de la investigación** de la Review, y la **frecuencia de las paradas** entre Stories.
+
+## El problema que resuelve
+
+El loop, tal como estaba, se detenía al terminar cada Story y gastaba el mismo esfuerzo de Review en todas. Eso es correcto para Stories de proceso o de motor, y desproporcionado para un cambio de HUD. El resultado medible: sesiones que no pasan de una Story, y Reviews cuyo coste no guarda relación con lo que arriesga el diff.
+
+## 1. Niveles de Review
+
+Tres niveles. **El nivel no lo elige nadie: se deriva de la clase declarada**, igual que el nivel de validación. Es la misma decisión mecánica, tomada en el mismo momento — `Create Story` — y auditable después.
+
+| Clase | Nivel de Review |
+|---|:---:|
+| `herramientas`, `contratos`, `rendimiento`, `gate-epic`, `gate-rc` | **A** |
+| `integracion`, `algoritmos`, `logica-interna`, `ia`, `render` | **B** |
+| `ux-hud`, `audio`, `documentacion` | **C** |
+
+### Escalado mecánico a nivel A — lo decide el diff, no el revisor
+
+Con independencia de la clase, la Review sube a **nivel A** si el conjunto atribuible cumple **cualquiera** de estas condiciones:
+
+1. **Cambia el layout de WRAM** — añade, quita o redimensiona una variable global o `static`.
+2. Toca **DMA, direcciones de VRAM, OAM o el mapa de memoria**.
+3. Toca `tools/` — harness, scripts del loop, o cualquier instrumento de verificación.
+4. Toca el `Makefile` o la cadena de build.
+
+El escalado es **mecánico y verificable sobre el diff**, no una opinión. Se calcula **antes de empezar** la Review, y no depende de nada que el revisor descubra mientras trabaja. Si estaba mal calculado, eso es un hallazgo y la Review se re-ejecuta en A.
+
+### Escalado discrecional — el revisor lo pide, no lo toma
+
+Distinto caso: una Review de nivel B o C que, **a mitad de trabajo**, cree que hace falta investigación profunda.
+
+> **Regla. El revisor se detiene inmediatamente y explica por qué. No empieza esa investigación por iniciativa propia.**
+>
+> **La decisión de escalar una Review corresponde al Loop, no al revisor.**
+
+Lo que entrega al detenerse: qué encontró, por qué cree que no puede concluir sin profundizar, y qué haría exactamente si se le autoriza. El orquestador decide entre escalar a nivel A, aceptar la Review tal como está con el hueco declarado, o registrar la sospecha como `defer`.
+
+Sin esta regla, los niveles B y C no existen: cualquier revisor que encuentre algo interesante se convierte en nivel A por su cuenta, y el presupuesto de la Review deja de ser predecible. Un hueco declarado es información; una Review que se desborda en silencio, no.
+
+> **Por qué existe el disparador nº1.** La Story 4-8 añadió un buffer de 2048 bytes que desplazó `pad0` y `gs` en WRAM. El script Lua de V1 leía direcciones fijas, pasó a leer memoria arbitraria, y **el harness siguió devolviendo `PASS`** (hallazgo G1). Un cambio de layout de WRAM es capaz de invalidar el instrumento de medición sin que nada se ponga en rojo. Es exactamente el tipo de riesgo que no se detecta con una Review ligera.
+
+### Qué hace cada nivel
+
+| | **A — profunda** | **B — acotada** | **C — ligera** |
+|---|---|---|---|
+| **Independencia** | Sí | Sí | Sí |
+| **Re-ejecuta V0** | Sí, con `rebuild_v0.py` | Sí, con `rebuild_v0.py` | Sí, `make` |
+| **Re-ejecuta V1** | Sí | Sí | Sí |
+| **Contención de alcance** | Sí | Sí | Sí |
+| **Auditoría de AC** | Cada uno, contra el código | Todos, contra el diff y el código modificado | Todos, contra el diff |
+| **Superficie de lectura** | Sin límite | **Solo el código modificado y sus llamantes directos** | **Solo el diff** |
+| **Búsqueda de regresiones** | Activa, incluidos sistemas colindantes | Regresiones **evidentes**: lo que V0/V1 delaten más lo que el diff toca | Solo lo que V0/V1 delaten |
+| **Consistencia con la arquitectura** | Sí | No | No |
+| **Intento deliberado de romper** | Sí | No | No |
+| **Instrumentación propia** (sondas, scripts, repos sintéticos) | **Permitida** | **Prohibida** | **Prohibida** |
+| **Investigación exploratoria** | Sí | **Prohibida** | **Prohibida** |
+| **Coste orientativo** | Alto | Medio-bajo | Mínimo |
+
+**Nivel A — sin cambios.** Puede investigar en profundidad, crear instrumentación temporal cuando sea imprescindible, analizar arquitectura, e invertir el tiempo que haga falta. Es lo que se hizo en `process-1` y en `4-8`, y se ganó el precio: en `4-8` el revisor construyó su propia sonda Lua, leyó WRAM y VRAM durante ~1600 frames, y verificó ocho AC empíricamente en lugar de por lectura de código.
+
+**Nivel B — práctica y acotada.** Verifica cuatro cosas y para:
+
+1. La Story **cumple sus AC**.
+2. **No rompe** funcionalidad existente.
+3. El **alcance se respetó**.
+4. **No hay regresiones evidentes**.
+
+Se apoya, en este orden, en: **V0 → V1 → diff → código modificado**. Y **no**:
+
+- lee módulos no relacionados con el diff;
+- revisa la arquitectura completa;
+- propone rediseños;
+- escribe herramientas, scripts de depuración o sondas Lua;
+- abre investigación exploratoria.
+
+Si detecta una posible mejora fuera del alcance: **la registra como `defer` y continúa. No la investiga.** Anotar la sospecha cuesta una línea; perseguirla cuesta la Review entera.
+
+**Nivel C — extremadamente ligero.** Revisa **únicamente** el diff, los AC y el resultado de V0/V1. Ninguna investigación adicional, de ningún tipo.
+
+## 2. Política de Review — qué es y qué no es
+
+En los tres niveles, la Review responde **una sola pregunta**:
+
+> **¿La Story cumple correctamente el objetivo definido por sus criterios de aceptación?**
+
+**La Review no es una auditoría del proyecto.** Su objeto es la Story, delimitado por sus AC y su allowlist. Un problema real que viva fuera de ese objeto es material `defer`, no un hallazgo de esta Review — y buscarlo activamente es trabajo que nadie pidió.
+
+De ahí se siguen cuatro límites, que aplican **a todos los niveles**:
+
+1. **No rediseña la arquitectura.** Una alternativa mejor no es un hallazgo. Si la arquitectura es el problema, eso es `/gds-correct-course`.
+2. **No amplía el alcance.** La ausencia de algo declarado fuera de alcance no es un hallazgo. Se registra como diferido y se sigue.
+3. **No crea herramientas de depuración nuevas** salvo en nivel A, o con autorización explícita del orquestador. **Si la Review considera que necesita una herramienta para poder concluir: registra la necesidad y se detiene.** No la construye por su cuenta.
+4. **Prioriza la ejecución sobre la lectura.** Ver el orden de abajo.
+
+Un hallazgo válido señala que la Story **no cumple su objetivo**, o que **afirma algo que no es cierto**. Todo lo demás es material diferido.
+
+## 3. Principio de coste
+
+> **La profundidad de la Review es proporcional al riesgo de la Story.** El esfuerzo dedicado a revisar no debe superar claramente el dedicado a implementar. Si la implementación tomó minutos, la Review también.
+
+Es un principio de proporción, no una métrica exacta. Su función es dar un criterio de parada a un trabajo que, por su naturaleza, siempre admite una pregunta más: no existe un punto en el que una Review haya *terminado* de buscar. Sin límite declarado, el fondo de la Review lo fija el aguante del revisor, y eso no es una política.
+
+### Lo que el principio de coste NO puede recortar
+
+Esta es la mitad importante, y sin ella el principio se convierte en una excusa.
+
+> **El suelo de validación está exento.** V0 y V1, re-ejecutados por la Review, se corren **siempre**, en los tres niveles, por larga o corta que fuese la implementación. También la comprobación de contención de alcance.
+
+El motivo es el mismo que sostiene la regla del suelo: **el coste de V0 y V1 es tiempo de máquina, no atención humana ni tokens de análisis.** El principio de coste gobierna la **investigación** —leer, explorar, formular hipótesis, intentar romper—, que es donde está el gasto real y donde el rendimiento decae. No gobierna la **ejecución**.
+
+Una Review que se salte V1 alegando que la Story era pequeña no es una Review ligera: es ninguna Review. La Story de humo cambió **un valor de paleta** y su V1 seguía siendo lo único capaz de demostrar que la lógica de gravedad no se había movido.
+
+## 4. Prioridad de validación en Stories de gameplay
+
+> **V0 → V1 → V2. La inspección estática complementa, nunca sustituye.**
+
+Es el orden de autoridad del framework aplicado al gasto de esfuerzo: la Review agota primero lo que se puede **ejecutar**, y solo después lee código para explicar lo que la ejecución mostró. Un hallazgo derivado únicamente de leer el código, sin ninguna ejecución que lo respalde, se marca como **no reproducido** y baja de severidad.
+
+Esto también acota el coste: releer un módulo entero buscando problemas hipotéticos es la parte más cara de una Review y la de menor rendimiento.
+
+## 5. Sprint Mode
+
+Modo de ejecución continua. Con una sola instrucción, el loop encadena Stories sin pedir autorización entre ellas.
+
+### Ciclo
+
+Al cerrar una Story correctamente, y **sin preguntar**:
+
+1. **Commit**, acotado al conjunto atribuible.
+2. **Actualizar la Story** — registro de validación, hallazgos, Change Log, estado `done`.
+3. **Actualizar el roadmap** si aplica — `BOOTSTRAP.md`, trazabilidad, deuda diferida.
+4. **Nuevo baseline** — `story_baseline.py snapshot` sobre el commit recién hecho.
+5. **Siguiente Story** — y empezar de inmediato.
+
+### De dónde sale la siguiente Story
+
+En orden, y se para en el primero que dé resultado:
+
+1. Una Story en estado `ready-for-dev` en `implementation-artifacts/`.
+2. La lista explícita que el orquestador dio al abrir el Sprint.
+3. `Create Story` sobre el siguiente candidato de `epics.md`.
+
+> **Advertencia operativa.** `epics.md` está **agotado**: sus catorce Stories están ejecutadas. Hasta que se amplíe el plan, todo Sprint empieza por `Create Story`, y su primer paso es acordar qué Stories entran.
+
+### Condiciones de parada
+
+El Sprint se detiene, y solo se detiene, por:
+
+| Condición | Qué entrega |
+|---|---|
+| **V2 requerida** | La Story queda a la espera del acta. El Sprint **no** salta a la siguiente: V2 es un gate, no una tarea de fondo |
+| **Decisión arquitectónica** | La decisión planteada con opciones y una recomendación |
+| **Blocker real** | El blocker, lo que ya se hizo, y lo que queda |
+| **Presupuesto agotado** | El resumen de Sprint completo |
+
+Ninguna otra cosa detiene el Sprint. En particular, **no lo detienen** los hallazgos `patch` de una Review —se aplican y se sigue— ni los `defer` —se registran y se sigue—.
+
+### V2 dentro de un Sprint
+
+V2 es la única parada que el loop no puede evitar, y en gameplay es frecuente. Dos reglas para que no lo trocee todo:
+
+1. **Al planificar el Sprint, agrupar por clase.** Encadenar las Stories sin V2 y dejar las que la exigen para el final agrupa las paradas en una sola sesión de emulador en vez de repartirlas.
+2. **Una Story parada en V2 no bloquea a las que no dependen de ella.** Puede quedar `in-progress` a la espera del acta mientras el Sprint sigue — **siempre que la siguiente Story no dependa de su código**. Si depende, el Sprint se detiene. Esto es una excepción acotada y hay que declararla en el resumen.
+
+### Presupuesto
+
+Se fija al abrir el Sprint. Formas admitidas:
+
+- **Por número de Stories** — «máximo 3», «máximo 5».
+- **Hasta la primera V2.**
+- **Por presupuesto de tokens** — se detiene al alcanzarlo, terminando la Story en curso.
+
+Sin presupuesto declarado, el valor por defecto es **hasta la primera V2**. Un Sprint sin límite no existe.
+
+### Resumen de Sprint
+
+Al agotarse el presupuesto, o al detenerse por cualquier otra causa, se entrega:
+
+| Bloque | Contenido |
+|---|---|
+| Stories cerradas | Clase, nivel de Review aplicado, niveles de validación, hash de commit |
+| Stories no cerradas | Estado y motivo exacto |
+| Hallazgos | Aplicados, diferidos y `decision-needed` abiertos |
+| Deuda de V2 | Actas pendientes, con qué hay que observar en cada una |
+| Estado del árbol | Limpio o sucio, y baseline vigente |
+| Presupuesto | Consumido frente a asignado |
+
+## 6. Riesgo asumido, declarado
+
+Esta política **reduce deliberadamente** el esfuerzo de verificación en las clases de menor riesgo, y reduce el número de puntos donde un humano mira el proceso. Eso tiene un coste esperado: **un nivel C dejará pasar cosas que un nivel A habría cazado.**
+
+La apuesta es que ese coste sea menor que el de no poder avanzar más de una Story por sesión. Es una apuesta, no un teorema, y estas son las barandillas que la sostienen:
+
+- El **suelo de validación no se toca**: V0 + V1 en toda Story que pueda alterar la ROM, en los tres niveles.
+- La **Review sigue siendo independiente** en los tres niveles, y re-ejecuta V0 y V1 por su cuenta. Esto es lo que impide que "ligera" degenere en "autoevaluación".
+- El **escalado a nivel A es mecánico**, y sus cuatro disparadores cubren las vías por las que un cambio pequeño invalida el instrumento de medición.
+- Un revisor de nivel B o C que crea insuficiente su propio alcance **se detiene y lo dice**, en vez de firmar un veredicto que no puede sostener. Un hueco declarado sigue siendo información.
+- El **resumen de Sprint** concentra en un punto la revisión humana que antes estaba repartida entre Stories.
+
+**Señal de que la apuesta salió mal:** si una Story revisada en nivel C produce después un hallazgo que el nivel A habría detectado, eso es un **Loop Bug** y obliga a revisar esta tabla — no a culpar al revisor.
 
 ---
 
@@ -627,6 +838,31 @@ Ver la [comprobación de señal](#comprobación-de-que-la-señal-puede-ponerse-e
 ---
 
 # Historial de versiones
+
+### v1.3
+
+Refuerza la política de Review introducida en v1.2. Ajusta profundidad y criterio de parada; no toca el suelo de validación ni la independencia.
+
+- **Pregunta única de la Review**, reformulada y acotada a los AC: *¿la Story cumple correctamente el objetivo definido por sus criterios de aceptación?* Se declara explícitamente que **la Review no es una auditoría del proyecto**.
+- **Nivel B pasa de "media" a "acotada"**, con superficie de lectura limitada al código modificado y sus llamantes directos, y con prohibiciones explícitas: nada de módulos no relacionados, arquitectura completa, rediseños, herramientas, scripts de depuración, sondas ni investigación exploratoria. Una mejora fuera de alcance se registra como `defer` y **no se investiga**.
+- **Nivel C pasa a "extremadamente ligero"**: solo diff, AC y resultado de V0/V1. Cero investigación adicional.
+- **Nivel A sin cambios.**
+- Agrega el **principio de coste**: la profundidad es proporcional al riesgo y el esfuerzo de Review no debe superar claramente el de implementación. Con su contrapartida explícita — **el suelo de validación está exento**: V0, V1 y la contención de alcance se ejecutan siempre, porque el principio gobierna la investigación, no la ejecución.
+- Separa **escalado mecánico** (lo decide el diff, se calcula antes de empezar) de **escalado discrecional** (el revisor de nivel B o C **se detiene y lo pide**, no lo toma). Se establece que **la decisión de escalar corresponde al Loop, no al revisor**.
+- **No modifica** la regla del suelo, la tabla de clases, los niveles de validación, la independencia de la Review, el orden de autoridad ni nada de "Qué queda intacto".
+
+### v1.2
+
+Política de ejecución. Cambia **cuándo se detiene el loop** y **cuánto esfuerzo gasta la Review**; no cambia qué se verifica ni quién tiene autoridad.
+
+- Agrega la sección **"Política de ejecución — Sprint Mode y Review por riesgo"**.
+- **Tres niveles de Review (A / B / C)**, derivados mecánicamente de la clase declarada. El nivel no lo elige el revisor, igual que el nivel de validación no lo elige el ejecutor.
+- **Escalado automático a nivel A** por cuatro disparadores comprobables sobre el diff: cambio de layout de WRAM, DMA/VRAM/OAM, `tools/`, y build. El primero se añade como consecuencia directa del hallazgo G1 de la Story 4-8, donde un buffer nuevo desplazó `pad0` y `gs` y el harness siguió dando `PASS` leyendo memoria arbitraria.
+- **Política de Review**: una sola pregunta —¿la Story cumple su objetivo?— y cuatro límites. Sin rediseño de arquitectura, sin ampliación de alcance, sin herramientas nuevas fuera del nivel A, y ejecución antes que lectura.
+- **Prioridad V0 → V1 → V2** con la inspección estática como complemento. Un hallazgo sin ejecución que lo respalde se marca **no reproducido**.
+- **Sprint Mode**: ejecución continua con commit, actualización y arranque de la siguiente Story sin autorización intermedia. Cuatro condiciones de parada, presupuesto obligatorio, y resumen de Sprint.
+- Declara **explícitamente el riesgo asumido** y las cuatro barandillas que lo acotan, más la señal que indicaría que la apuesta salió mal.
+- **No modifica** la regla del suelo, la tabla de clases, los niveles de validación, la independencia de la Review, el orden de autoridad ni ningún elemento listado en "Qué queda intacto".
 
 ### v1.1
 

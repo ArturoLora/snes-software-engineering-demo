@@ -2,7 +2,7 @@
 baseline_commit: 7c48ac6
 baseline_dirty:
   - path: CLAUDE.md
-    md5: 9b491b3f9b61a0a1df1b9ab4f610ec80
+    md5: ae9688e71a4720474f2fae66086d56e5
   - path: README.md
     md5: 0761a1453e6dd8a9841bd478c9d9c2d3
   - path: _bmad-output/project-context.md
@@ -12,7 +12,7 @@ baseline_dirty:
   - path: snes/piece.png
     md5: 291edda429e5ffd42d891b033da424a6
   - path: _bmad-output/implementation-artifacts/smoke-1-color-pieza-activa.md
-    md5: cf3e4ac04fc52e2c139e5bb918b6e728
+    md5: f062e834279beb68f7fb0eca906d83fd
 story_class: herramientas
 minimum_validation: V0 + V1
 ---
@@ -535,6 +535,53 @@ comprobación de ancestría), T6 (repo git anidado), F3 (`M` de merge confundido
 no-código).
 
 **Status: done.**
+
+## Reconciliación de `baseline_dirty` — leer antes de aprobar
+
+**Esta sección documenta una operación que es indistinguible de un fraude si no se
+justifica. El revisor tiene que juzgarla explícitamente.**
+
+Durante la Story, el orquestador humano modificó dos archivos que estaban declarados
+como suciedad previa. `check` lo detectó y **bloqueó** con exit 1:
+
+```
+DECLARADOS PERO MODIFICADOS (2):
+  CLAUDE.md  (9b491b3f -> ae9688e7)
+  _bmad-output/.../smoke-1-color-pieza-activa.md  (cf3e4ac0 -> f062e834)
+```
+
+Los dos cambios son atribuibles y verificables como **ajenos a esta Story**:
+
+| Ruta | Qué cambió | Por qué no es de esta Story |
+|---|---|---|
+| `CLAUDE.md` | Reescritura de la sección de reglas Git: autorización explícita por instancia, `push`/`tag`/reescrituras siempre prohibidas, y la regla de commitear el **conjunto atribuible** en vez de `git add -A` | Es política de proyecto sobre operaciones Git. Esta Story no toca Git ni política; su objeto son dos herramientas de baseline y reproducción de V0. Contenido inspeccionable en `git diff CLAUDE.md` |
+| `smoke-1-color-pieza-activa.md` | El orquestador firmó el **acta de V2** de la Story de humo, cerrando su hallazgo H1 | Es progreso de *otra* Story, la de humo, que estaba bloqueada esperando precisamente esa acta |
+
+Reconciliación aplicada, por el camino que la propia herramienta prescribe
+(*"justificar el cambio en la allowlist y regenerar el frontmatter, o revertirlo"*):
+se actualizaron los dos `md5` del frontmatter a los valores nuevos.
+
+> **Advertencia para el revisor.** Regenerar hashes a mitad de Story **es** el vector
+> R3, declarado abierto en esta misma Story. Que aquí sea legítimo depende de que las
+> dos justificaciones de arriba sean ciertas, y eso hay que comprobarlo leyendo los
+> diffs — no aceptarlo porque esté escrito. El mecanismo garantiza que la operación
+> sea **visible y deliberada**; no garantiza que sea honesta.
+
+### Lo que este episodio demuestra
+
+No estaba planeado, y es la mejor evidencia de la corrección de R2 que se podía
+obtener: **antes del patch de contenido, los dos archivos se habrían restado en
+silencio** y la Review habría visto un conjunto atribuible limpio de 5 archivos
+mientras dos ajenos a la allowlist cambiaban sin dejar rastro.
+
+### Hallazgo nuevo derivado
+
+**T9 — El orquestador editando archivos a mitad de Story bloquea la Story.** Es
+comportamiento correcto, pero operativamente relevante: editar `CLAUDE.md` o firmar
+un acta en otra Story son acciones normales del orquestador, y cada una obliga a un
+ciclo de reconciliación documentada. Conviene decidir si se acota (no editar rutas
+declaradas mientras haya una Story en vuelo) o si la reconciliación se acepta como
+parte del flujo. **Disposición: `decision-needed`.**
 
 ## Change Log
 

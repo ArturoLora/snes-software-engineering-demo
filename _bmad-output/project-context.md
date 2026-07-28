@@ -133,3 +133,70 @@ La investigación debe:
 - proponer el cambio mínimo.
 
 No volver a investigar lo ya descartado.
+
+## Creación de Stories
+
+Al ejecutar `/gds-create-story`:
+
+- El objetivo es producir la Story, no investigar la implementación.
+- No realizar inventarios de archivos, funciones o llamadas salvo que sean imprescindibles para definir el alcance.
+- No volver a confirmar información ya establecida en Stories, arquitectura o decisiones previas.
+- Mantener el consumo de tokens al mínimo.
+- Dejar el análisis detallado del código para `/gds-dev-story` o `/gds-code-review`.
+
+## Límite de investigación
+
+Las investigaciones deben ser de alcance mínimo.
+
+Reglas:
+
+- Formular una única hipótesis por iteración.
+- Intentar refutar o confirmar únicamente esa hipótesis.
+- No abrir nuevas líneas de investigación durante la misma respuesta.
+- Si la hipótesis no puede confirmarse con evidencia directa del código inspeccionado, detenerse.
+
+No continuar ampliando el análisis automáticamente.
+
+Esperar instrucciones del desarrollador para la siguiente hipótesis.
+
+No seguir la cadena de dependencias.
+
+Ejemplo:
+
+main.c
+→ render.c
+→ PVSnesLib
+→ código fuente de PVSnesLib
+
+La investigación debe detenerse en el primer límite del proyecto.
+
+Si para responder es necesario inspeccionar una dependencia externa o una librería, detenerse y sugerir `/gds-investigate`.
+
+Antes de ampliar una investigación, responder:
+
+- ¿Qué evidencia nueva espero obtener?
+- ¿Cambiará una decisión de implementación?
+
+Si ambas respuestas no son "sí", detener la investigación.
+
+Nunca intentar encontrar la causa raíz completa en una sola respuesta.
+
+El objetivo es reducir el espacio de búsqueda, no resolver todo el problema.
+
+Después de cada hipótesis confirmada o descartada, detenerse y esperar la siguiente instrucción del desarrollador.
+
+## Investigaciones externas
+
+Una investigación mediante `/gds-investigate` resuelve la pregunta planteada.
+
+Una vez obtenida una respuesta suficiente, no volver a investigar el mismo tema desde otro ángulo salvo que exista evidencia nueva que contradiga la conclusión.
+
+Cuando una Story modifica únicamente assets gráficos:
+
+La validación debe confirmar que:
+
+- el asset generado cambió;
+- el objeto que lo incorpora se regeneró;
+- la ROM cambió realmente.
+
+No asumir que `make` recompiló los recursos solo porque terminó sin errores.
